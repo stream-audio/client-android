@@ -1,0 +1,14 @@
+[package]
+name = "audio-sharing-android"
+version = "0.1.0"
+authors = ["Anton Rapetov <willir29@yandex.ru>"]
+edition = "2018"
+
+[dependencies]
+jni = { version = "0.12.3", default-features = false }
+android_logger = "0.8"
+log = "0.4"
+libc = "0.2"
+
+[lib]
+crate-type = ["dylib"]
