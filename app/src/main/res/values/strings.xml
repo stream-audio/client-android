@@ -2,6 +2,6 @@
     <string name="app_name">Audio Sharing</string>
     <string name="play_button">Play</string>
     <string name="stop_button">Stop</string>
-    <string name="hintIpPort">127.0.0.1:78980</string>
+    <string name="hintIpPort">127.0.0.1:25204</string>
     <string name="btnConnect">connect</string>
 </resources>

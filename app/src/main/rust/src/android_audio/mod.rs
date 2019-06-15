@@ -159,7 +159,7 @@ pub struct AudioPlayer {
 }
 
 #[allow(dead_code)]
-#[derive(PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum PlayState {
     Stopped,
     Paused,
@@ -224,7 +224,7 @@ impl Engine {
         unsafe {
             let mut loc_bufq = a_ffi::SLDataLocator_AndroidSimpleBufferQueue {
                 locatorType: SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
-                numBuffers: 2,
+                numBuffers: 5,
             };
 
             let mut format_pcm = a_ffi::SLDataFormat_PCM {
@@ -309,6 +309,7 @@ impl AudioPlayer {
     }
 
     pub fn enqueue(&self, buf: &[u8]) -> Result<(), Error> {
+        info!("enqueue({})", buf.len());
         let itf = self.buffer_que_interface()?;
         Self::enqueue_raw(itf, buf)
     }
@@ -404,6 +405,10 @@ impl PlayCallbackWrapper {
                 return;
             }
         };
+
+        if n == 0 {
+            return;
+        }
 
         let res = AudioPlayer::enqueue_raw(itf, &self.buf[..n]);
         if let Err(e) = res {

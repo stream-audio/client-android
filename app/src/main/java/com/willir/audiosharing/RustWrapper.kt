@@ -13,11 +13,11 @@ class RustWrapper {
     private var rustObj: Long = 0;
 
     init {
-        rustObj = createPlayerNative()
+        rustObj = createObjectNative()
     }
 
     fun destroy() {
-        destroyPlayerNative(rustObj)
+        destroyObjectNative(rustObj)
         rustObj = 0
     }
 
@@ -27,8 +27,8 @@ class RustWrapper {
         }
     }
 
-    fun play(fPath: String) {
-        playNative(rustObj, fPath)
+    fun play(addr: String) {
+        playNative(rustObj, addr)
     }
 
     fun stop() {
@@ -39,16 +39,11 @@ class RustWrapper {
         return isPlayingNative(rustObj)
     }
 
-    fun connect(addr: String) {
-        connectNative(rustObj, addr)
-    }
-
     external fun greeting(pattern: String): String
 
-    private external fun createPlayerNative(): Long
-    private external fun destroyPlayerNative(rustObj: Long): Long
-    private external fun playNative(rustObj: Long, fPath: String)
+    private external fun createObjectNative(): Long
+    private external fun destroyObjectNative(rustObj: Long): Long
+    private external fun playNative(rustObj: Long, addr: String)
     private external fun stopNative(rustObj: Long)
     private external fun isPlayingNative(rustObj: Long): Boolean
-    private external fun connectNative(rustObj: Long, addr: String): Boolean
 }

@@ -36,10 +36,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btnConnect).setOnClickListener {
-            connect()
-        }
-
         requestPermissions()
     }
 
@@ -50,7 +46,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun play() {
-        rustWrapper!!.play(Environment.getExternalStorageDirectory().path + "/Music/audio.example.wav")
+        val address =  findViewById<EditText>(R.id.etRemoteAddress).text.toString()
+        if (address.isEmpty()) {
+            Toast.makeText(this, "Please fill the address field.", Toast.LENGTH_LONG).show()
+            return;
+        }
+
+        rustWrapper!!.play(address)
+        //rustWrapper!!.play(Environment.getExternalStorageDirectory().path + "/Music/audio.example.wav")
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.stop_button)
@@ -61,16 +64,6 @@ class MainActivity : AppCompatActivity() {
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.play_button)
-    }
-
-    private fun connect() {
-        val address =  findViewById<EditText>(R.id.etRemoteAddress).text.toString()
-        if (address.isEmpty()) {
-            Toast.makeText(this, "Please fill the address field.", Toast.LENGTH_LONG).show()
-            return;
-        }
-
-        rustWrapper!!.connect(address)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -97,14 +90,5 @@ class MainActivity : AppCompatActivity() {
         if (permissionsToRequest.isEmpty()) return;
 
         ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), PERMISSION_ID)
-    }
-
-    private fun requestReadExternalStorage() {
-        val isGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) ==
-                PackageManager.PERMISSION_GRANTED
-        if (isGranted) return
-
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-            PERMISSION_ID)
     }
 }

@@ -1,7 +1,6 @@
 use crate::android_helper;
 use crate::error::{Error, ErrorRepr};
 use crate::net_client;
-use crate::player;
 use crate::player::Player;
 use crate::rust_greeting;
 use jni::objects::{JClass, JString};
@@ -31,6 +30,10 @@ macro_rules! throw_on_err {
     }};
 }
 
+struct RustObj {
+    net_client: Option<net_client::NetClient>,
+}
+
 fn throw_java_exception(env: JNIEnv, e: &Error) {
     match e.repr.as_ref() {
         ErrorRepr::NullPointer(descr) => {
@@ -44,13 +47,13 @@ fn throw_java_exception(env: JNIEnv, e: &Error) {
         .unwrap();
 }
 
-fn to_player_mut(ptr: i64) -> Result<&'static mut Player, Error> {
-    unsafe { (ptr as usize as *mut Player).as_mut() }
-        .ok_or_else(|| Error::new_null_ptr("player is null".to_owned()))
+fn to_rust_obj_mut(ptr: i64) -> Result<&'static mut RustObj, Error> {
+    unsafe { (ptr as usize as *mut RustObj).as_mut() }
+        .ok_or_else(|| Error::new_null_ptr("object is null".to_owned()))
 }
 
-fn to_player_ref(ptr: i64) -> Result<&'static Player, Error> {
-    unsafe { (ptr as usize as *mut Player).as_ref() }
+fn to_rust_obj_ref(ptr: i64) -> Result<&'static RustObj, Error> {
+    unsafe { (ptr as usize as *mut RustObj).as_ref() }
         .ok_or_else(|| Error::new_null_ptr("player is null".to_owned()))
 }
 
@@ -74,72 +77,90 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_greeting(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_createPlayerNative(
-    env: JNIEnv,
+pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_createObjectNative(
+    _env: JNIEnv,
     _: JClass,
 ) -> i64 {
-    info!("create_player is called");
+    info!("createObject is called");
+    println!("STDCOUT");
 
-    let player: Player = throw_on_err!(player::create_player(), env, 0);
-    let player = Box::new(player);
-
-    Box::into_raw(player) as i64
+    let rust_obj = Box::new(RustObj::new());
+    Box::into_raw(rust_obj) as i64
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_destroyPlayerNative(
+pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_destroyObjectNative(
     _env: JNIEnv,
     _: JClass,
-    player: i64,
+    rust_obj: i64,
 ) {
-    info!("destroy_player is called");
-    if player == 0 {
+    info!("destroyObject is called");
+    if rust_obj == 0 {
         return;
     }
-    let _ = unsafe { Box::from_raw(player as *mut Player) };
+    let _ = unsafe { Box::from_raw(rust_obj as *mut RustObj) };
 }
 
 #[no_mangle]
 pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_playNative(
     env: JNIEnv,
     _: JClass,
-    player: i64,
-    f_path: JString,
+    rust_obj: i64,
+    remote_addr: JString,
 ) {
     info!("Play is called");
-    println!("STDCOUT");
 
-    let player = throw_on_err!(to_player_mut(player), env);
-    let f_path: String = env.get_string(f_path).unwrap().into();
+    let remote_addr: String = env.get_string(remote_addr).unwrap().into();
 
-    throw_on_err!(player.play_from_wav_file(&f_path), env);
+    let remote_addr: std::net::SocketAddr = throw_on_err!(
+        remote_addr
+            .parse()
+            .map_err(|e| Error::new_net_parse(e, remote_addr)),
+        env
+    );
+
+    let rust_obj: &mut RustObj = throw_on_err!(to_rust_obj_mut(rust_obj), env);
+
+    rust_obj.net_client.take();
+
+    let player = throw_on_err!(Player::new(), env);
+    let net_client = throw_on_err!(
+        net_client::NetClient::new(remote_addr, "0.0.0.0:25204".parse().unwrap(), player),
+        env
+    );
+
+    rust_obj.net_client = Some(net_client);
 }
 
 #[no_mangle]
 pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_stopNative(
     env: JNIEnv,
     _: JClass,
-    player: i64,
+    rust_obj: i64,
 ) {
     info!("Stop is called");
 
-    let player = throw_on_err!(to_player_ref(player), env);
-    throw_on_err!(player.stop_playing(), env);
+    let rust_obj: &mut RustObj = throw_on_err!(to_rust_obj_mut(rust_obj), env);
+
+    if let Some(mut net_client) = rust_obj.net_client.take() {
+        throw_on_err!(net_client.stop(), env);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_isPlayingNative(
     env: JNIEnv,
     _: JClass,
-    player: i64,
+    rust_obj: i64,
 ) -> bool {
     info!("isPlaying is called");
 
-    let player = throw_on_err!(to_player_ref(player), env, false);
+    let rust_obj: &RustObj = throw_on_err!(to_rust_obj_ref(rust_obj), env, false);
 
-    throw_on_err!(player.is_playing(), env, false)
+    rust_obj.net_client.is_some()
 }
 
+/*
 #[no_mangle]
 pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_connectNative(
     env: JNIEnv,
@@ -151,11 +172,19 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_connectNative(
 
     let remote_addr: String = env.get_string(remote_addr).unwrap().into();
 
+    let remote_addr: std::net::SocketAddr = throw_on_err!(
+        remote_addr
+            .parse()
+            .map_err(|e| Error::new_net_parse(e, remote_addr)),
+        env
+    );
+
     throw_on_err!(
-        net_client::connect_to(remote_addr.as_ref(), "0.0.0.0:25204"),
+        net_client::connect_to(remote_addr, "0.0.0.0:25204".parse().unwrap()),
         env
     );
 }
+*/
 
 #[no_mangle]
 pub extern "C" fn JNI_OnLoad(_vm: *mut JavaVM, _reserved: *mut c_void) -> i32 {
@@ -163,4 +192,10 @@ pub extern "C" fn JNI_OnLoad(_vm: *mut JavaVM, _reserved: *mut c_void) -> i32 {
     info!("JNI OnLoad");
     android_helper::redirect_stdcout();
     jni::JNIVersion::V6.into()
+}
+
+impl RustObj {
+    fn new() -> Self {
+        Self { net_client: None }
+    }
 }
