@@ -1,4 +1,4 @@
-# Stream AUdio Android Client
+# Stream Audio Android Client
 
 The android client for the stream audio project.
 
