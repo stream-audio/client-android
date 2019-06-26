@@ -76,3 +76,6 @@ lint/tmp/
 **/*.rs.bk
 Cargo.lock
 
+# Visual Studio Code
+.vscode/
+
