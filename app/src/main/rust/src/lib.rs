@@ -5,6 +5,7 @@ mod error;
 mod jni_ffi_callbacks;
 mod net_client;
 mod player;
+use stream_audio_ffmpeg as ffmpeg;
 
 pub fn rust_greeting(to: &str) -> String {
     format!("Hello {}. How are you?", to)

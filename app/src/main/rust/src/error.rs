@@ -1,4 +1,5 @@
 use crate::android_audio::SlError;
+use crate::ffmpeg;
 use std::borrow::Cow;
 use std::fmt;
 use std::net::AddrParseError;
@@ -56,6 +57,7 @@ pub enum ErrorRepr {
     SlError(SlError),
     NetParse((AddrParseError, Cow<'static, str>)),
     LockPoison(String),
+    Ffmpeg(ffmpeg::Error),
 }
 
 impl fmt::Display for Error {
@@ -74,6 +76,7 @@ impl fmt::Display for Error {
             ErrorRepr::SlError(e) => e.fmt(f),
             ErrorRepr::NetParse((e, addr)) => write!(f, "{} of {}", e, addr),
             ErrorRepr::LockPoison(descr) => write!(f, "{}", descr),
+            ErrorRepr::Ffmpeg(e) => e.fmt(f),
         }
     }
 }
@@ -82,22 +85,29 @@ impl ::std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error {
+        Self {
             repr: Box::new(ErrorRepr::Io((e, String::new()))),
         }
     }
 }
 impl From<SlError> for Error {
     fn from(e: SlError) -> Self {
-        Error {
+        Self {
             repr: Box::new(ErrorRepr::SlError(e)),
         }
     }
 }
 impl<T> From<PoisonError<T>> for Error {
     fn from(e: PoisonError<T>) -> Self {
-        Error {
+        Self {
             repr: Box::new(ErrorRepr::LockPoison(format!("{}", e))),
+        }
+    }
+}
+impl From<ffmpeg::Error> for Error {
+    fn from(e: ffmpeg::Error) -> Self {
+        Self {
+            repr: Box::new(ErrorRepr::Ffmpeg(e)),
         }
     }
 }

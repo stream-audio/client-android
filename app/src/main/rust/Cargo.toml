@@ -10,6 +10,8 @@ android_logger = "0.8"
 log = "0.4"
 libc = "0.2"
 mio = "0.6"
+stream-audio-ffmpeg = { git="https://github.com/stream-audio/ffmpeg.git" }
+#stream-audio-ffmpeg = { path="../../../../../ffmpeg" }
 
 [lib]
 crate-type = ["dylib"]

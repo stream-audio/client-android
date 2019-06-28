@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::ffmpeg;
 use crate::player::Player;
 use log::{info, warn};
 use mio;
@@ -52,6 +53,17 @@ impl NetClient {
 
         socket.send_to(b"info", &remote_addr)?;
 
+        let from_params = ffmpeg::AudioParams {
+            rate: 44100,
+            format: ffmpeg::AudioSampleFormat::FloatLe,
+        };
+        let to_params = ffmpeg::AudioParams {
+            rate: 44100,
+            format: ffmpeg::AudioSampleFormat::S16Le,
+        };
+        let resampler = ffmpeg::Resampler::new(from_params, to_params)?;
+        let decoder = ffmpeg::Decoder::new(ffmpeg::Codec::Aac)?;
+
         let poll_loop = PollLoop {
             poll,
             socket,
@@ -59,6 +71,8 @@ impl NetClient {
             state: State::InfoRequested,
             player,
             stopper,
+            resampler,
+            decoder,
         };
         let join_handle = thread::spawn(move || poll_loop.poll_loop());
 
@@ -104,6 +118,8 @@ struct PollLoop {
     state: State,
     player: Player,
     stopper: Stopper,
+    resampler: ffmpeg::Resampler,
+    decoder: ffmpeg::Decoder,
 }
 
 struct Stopper {
@@ -147,7 +163,12 @@ impl PollLoop {
     fn received_data(&mut self, buf: &[u8]) {
         match self.state {
             State::InfoRequested => self.send_start(),
-            State::Started => self.play(buf),
+            State::Started => {
+                let res = self.play(buf);
+                if let Err(e) = res {
+                    warn!("Error playing buffer: {}", e);
+                }
+            }
         }
     }
 
@@ -166,8 +187,13 @@ impl PollLoop {
         self.state = State::Started;
     }
 
-    fn play(&self, buf: &[u8]) {
-        self.player.enqueue(buf);
+    fn play(&mut self, buf: &[u8]) -> Result<(), Error> {
+        self.decoder.write(buf)?;
+        while let Some(data) = self.decoder.read()? {
+            let data = self.resampler.resample(data)?;
+            self.player.enqueue(data);
+        }
+        Ok(())
     }
 }
 

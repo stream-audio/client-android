@@ -2,15 +2,17 @@ package com.willir.audiosharing
 
 class RustWrapper {
     companion object {
-        private const val STATE_PLAYING = 1
-        private const val STATE_STOPPED = 1
-
         init {
+            System.loadLibrary("avutil")
+            System.loadLibrary("swresample")
+            System.loadLibrary("avcodec")
+            System.loadLibrary("avformat")
+
             System.loadLibrary("audio_sharing_android")
         }
     }
 
-    private var rustObj: Long = 0;
+    private var rustObj: Long = 0
 
     init {
         rustObj = createObjectNative()
