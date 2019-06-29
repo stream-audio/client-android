@@ -76,6 +76,9 @@ lint/tmp/
 **/*.rs.bk
 Cargo.lock
 
+# Rust output library:
+libaudio_sharing_android.so
+
 # Visual Studio Code
 .vscode/
 *.code-workspace

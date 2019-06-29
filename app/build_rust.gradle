@@ -1,0 +1,117 @@
+import java.nio.file.Files
+import java.nio.file.Paths
+
+class BuildRust extends DefaultTask {
+    String variant
+    static String OUT_LIB_NAME = "libaudio_sharing_android.so"
+
+    enum TargetType {
+        ARM64("arm64", "aarch64-linux-android", "arm64-v8a"),
+        ARM_V7("armv7", "armv7-linux-androideabi", "armeabi-v7a"),
+        X86("x86", "i686-linux-android", "x86")
+
+        final String id
+        final String rustTarget
+        final String jniLibDirName
+
+        private TargetType(String id, String rustTarget, String jniLibDirName) {
+            this.id = id
+            this.rustTarget = rustTarget
+            this.jniLibDirName = jniLibDirName
+        }
+
+        static TargetType fromId(String id) {
+            TargetType res = values().find {it.id == id}
+            if (res != null) {
+                return res
+            } else {
+                throw new GradleException("Wrong rust target: " + id + " supported: " + values().each {it.id})
+            }
+        }
+    }
+
+    @TaskAction
+    void buildRust() {
+        TargetType rustTargetName = null
+
+        if (project.hasProperty("rustTarget")) {
+            rustTargetName = TargetType.fromId((String) project.findProperty("rustTarget"))
+        }
+
+        if (rustTargetName != null) {
+            buildTarget(rustTargetName)
+        } else {
+            for (target in TargetType.values()) {
+                buildTarget(target)
+            }
+        }
+    }
+
+    void buildTarget(TargetType target) {
+        def cmd = ["cargo", "build", "--target=" + target.rustTarget]
+        if (isRelease()) {
+            cmd.add("--release")
+        }
+
+        logger.info("Executiong: " + cmd)
+        project.exec {
+            workingDir = getCargoPath()
+            commandLine = cmd
+        }.assertNormalExitValue()
+
+        copyTarget(target)
+    }
+
+    void copyTarget(TargetType target) {
+        def copyFrom = getRustLibOutPath(target)
+        def copyTo = getJniLibPath(target)
+
+        if (copyTo.toFile().exists()) {
+            copyTo.toFile().delete()
+        }
+
+        Files.copy(copyFrom, copyTo)
+        logger.info("Copy ${copyFrom} -> ${copyTo}")
+    }
+
+    java.nio.file.Path getRustLibOutPath(TargetType target) {
+        return Paths.get(getCargoPath().toString(), "target", target.rustTarget, variant, OUT_LIB_NAME)
+    }
+
+    java.nio.file.Path getJniLibPath(TargetType target) {
+        return Paths.get(getSrcRootPath().toString(), "jniLibs", target.jniLibDirName, OUT_LIB_NAME)
+    }
+
+    java.nio.file.Path getCargoPath() {
+        return Paths.get(getSrcRootPath().toString(), "rust")
+    }
+
+    java.nio.file.Path getSrcRootPath() {
+        return Paths.get(project.rootDir.getPath(), "app", "src", "main")
+    }
+
+    boolean isRelease() {
+        return variant == "release"
+    }
+}
+
+task buildRustDebug(type: BuildRust) {
+    group = "Build"
+    description = "Build debug rust library"
+    variant = "debug"
+}
+
+task buildRustRelease(type: BuildRust) {
+    group = "Build"
+    description = "Build release rust library"
+    variant = "release"
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == "compileDebugSources") {
+        task.dependsOn buildRustDebug
+    }
+    if (task.name == "compileReleaseSources") {
+        task.dependsOn buildRustRelease
+    }
+}
