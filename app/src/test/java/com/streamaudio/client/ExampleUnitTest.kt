@@ -1,4 +1,4 @@
-package com.willir.audiosharing
+package com.streamaudio.client
 
 import org.junit.Test
 

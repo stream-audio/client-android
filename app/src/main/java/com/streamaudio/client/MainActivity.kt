@@ -1,17 +1,15 @@
-package com.willir.audiosharing
+package com.streamaudio.client
 
 import android.Manifest
 import android.content.pm.PackageManager
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.os.Environment
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import kotlinx.android.synthetic.main.activity_main.view.*
 
 class MainActivity : AppCompatActivity() {
     var rustWrapper : RustWrapper? = null
@@ -89,6 +87,8 @@ class MainActivity : AppCompatActivity() {
 
         if (permissionsToRequest.isEmpty()) return;
 
-        ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), PERMISSION_ID)
+        ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(),
+            PERMISSION_ID
+        )
     }
 }

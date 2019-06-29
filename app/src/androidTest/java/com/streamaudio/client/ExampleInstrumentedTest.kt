@@ -1,4 +1,4 @@
-package com.willir.audiosharing
+package com.streamaudio.client
 
 import android.support.test.InstrumentationRegistry
 import android.support.test.runner.AndroidJUnit4

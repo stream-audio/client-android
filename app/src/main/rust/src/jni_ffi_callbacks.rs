@@ -58,7 +58,7 @@ fn to_rust_obj_ref(ptr: i64) -> Result<&'static RustObj, Error> {
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_greeting(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_greeting(
     env: JNIEnv,
     _: JClass,
     java_pattern: JString,
@@ -77,7 +77,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_greeting(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_createObjectNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_createObjectNative(
     _env: JNIEnv,
     _: JClass,
 ) -> i64 {
@@ -89,7 +89,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_createObjectNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_destroyObjectNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_destroyObjectNative(
     _env: JNIEnv,
     _: JClass,
     rust_obj: i64,
@@ -102,7 +102,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_destroyObjectNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_playNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_playNative(
     env: JNIEnv,
     _: JClass,
     rust_obj: i64,
@@ -133,7 +133,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_playNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_stopNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_stopNative(
     env: JNIEnv,
     _: JClass,
     rust_obj: i64,
@@ -148,7 +148,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_stopNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_isPlayingNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_isPlayingNative(
     env: JNIEnv,
     _: JClass,
     rust_obj: i64,
@@ -162,7 +162,7 @@ pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_isPlayingNative(
 
 /*
 #[no_mangle]
-pub extern "C" fn Java_com_willir_audiosharing_RustWrapper_connectNative(
+pub extern "C" fn Java_com_streamaudio_client_RustWrapper_connectNative(
     env: JNIEnv,
     _: JClass,
     _player: i64,

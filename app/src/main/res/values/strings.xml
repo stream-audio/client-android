@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Audio Sharing</string>
+    <string name="app_name">Stream Audio Client</string>
     <string name="play_button">Play</string>
     <string name="stop_button">Stop</string>
     <string name="hintIpPort">127.0.0.1:25204</string>
