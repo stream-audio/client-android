@@ -164,7 +164,7 @@ enum PostWriteAction {
     Read,
 }
 
-const JITTER_BUFFER_LEN: usize = 25;
+const JITTER_BUFFER_LEN: usize = 10;
 
 impl OutputBuffer {
     fn new() -> Self {
