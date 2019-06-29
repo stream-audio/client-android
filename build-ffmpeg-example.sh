@@ -33,10 +33,10 @@ export CXX=/home/willir/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x8
 
 # x86 to jniLibs/x86/:
 
-export CC=/home/willir/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android26-clang
-export CXX=/home/willir/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android26-clang++
+export CC=/home/willir/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android26-clang
+export CXX=/home/willir/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android26-clang++
 
-./configure --enable-cross-compile --enable-shared --disable-static --disable-programs --arch=i386 --cpu=i686 \
+./configure --enable-cross-compile --enable-shared --disable-static --disable-programs \
     --cc=$CC --cxx=$CXX \
     --disable-debug \
     --disable-network \
