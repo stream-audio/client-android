@@ -176,7 +176,7 @@ impl PollLoop {
         info!("Sending start");
         let res = self.player.start_playing();
         if let Err(e) = res {
-            warn!("Error setting starting playing: {}", e);
+            warn!("Error setting start playing: {}", e);
         }
 
         let res = self.socket.send_to(b"start", &self.addr);
