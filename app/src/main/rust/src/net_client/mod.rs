@@ -228,23 +228,3 @@ impl mio::Evented for Stopper {
         poll.deregister(&self.registration)
     }
 }
-
-/*
-pub fn connect_to(remote_addr: SocketAddr, local_addr: SocketAddr) -> Result<(), Error> {
-    info!("Addresses: remote: {}, local{}", remote_addr, local_addr);
-
-    let socket = UdpSocket::bind(&local_addr)?;
-    info!("Socket is created");
-
-    socket.send_to(b"info", &remote_addr)?;
-    info!("Data sent");
-
-    let mut in_buf = vec![0; 2048];
-    let n = socket.recv_from(in_buf.as_mut_slice())?.0;
-
-    let in_str = String::from_utf8_lossy(&in_buf[..n]);
-    info!("{}", in_str);
-
-    Ok(())
-}
-*/
