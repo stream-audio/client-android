@@ -121,6 +121,7 @@ macro_rules! call_sl_ignore_res {
     }};
 }
 
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub rate: SampleRate,
     pub format: SampleFormat,
@@ -419,6 +420,14 @@ impl PlayCallbackWrapper {
 }
 
 impl SampleRate {
+    pub fn to_hz(&self) -> usize {
+        match self {
+            SampleRate::Rate8000 => 8000,
+            SampleRate::Rate44100 => 44100,
+            SampleRate::Rate48000 => 48000,
+        }
+    }
+
     fn to_raw(&self) -> SLuint32 {
         match self {
             SampleRate::Rate8000 => SL_SAMPLINGRATE_8,
@@ -429,6 +438,14 @@ impl SampleRate {
 }
 
 impl SampleFormat {
+    pub fn get_sample_size(&self) -> usize {
+        match self {
+            SampleFormat::U8LE => 1,
+            SampleFormat::S16LE => 2,
+            SampleFormat::S32LE => 4,
+        }
+    }
+
     fn to_raw(&self) -> SLuint32 {
         match self {
             SampleFormat::U8LE => SL_PCMSAMPLEFORMAT_FIXED_8 as SLuint32,

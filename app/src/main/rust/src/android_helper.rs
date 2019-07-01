@@ -11,7 +11,7 @@ pub fn init_log() {
     android_logger::init_once(
         Config::default()
             .with_min_level(Level::Info)
-            .with_tag("Audio Sharing"),
+            .with_tag("StreamAudio"),
     );
 }
 

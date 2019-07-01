@@ -1,10 +1,13 @@
+#[macro_use]
+mod macros;
 mod android_audio;
 mod android_helper;
 mod error;
-#[allow(non_snake_case)]
-mod jni_ffi_callbacks;
+mod jni_ffi;
 mod net_client;
 mod player;
+mod util;
+
 use stream_audio_ffmpeg as ffmpeg;
 
 pub fn rust_greeting(to: &str) -> String {

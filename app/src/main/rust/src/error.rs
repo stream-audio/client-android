@@ -1,5 +1,6 @@
 use crate::android_audio::SlError;
 use crate::ffmpeg;
+use jni::errors::Error as JniError;
 use std::borrow::Cow;
 use std::fmt;
 use std::net::AddrParseError;
@@ -12,9 +13,9 @@ pub struct Error {
 
 impl Error {
     #[allow(dead_code)]
-    pub fn new_wrong_argument(description: String) -> Self {
+    pub fn new_wrong_argument<S: Into<Cow<'static, str>>>(description: S) -> Self {
         Error {
-            repr: Box::new(ErrorRepr::WrongArgument(description)),
+            repr: Box::new(ErrorRepr::WrongArgument(description.into())),
         }
     }
 
@@ -50,7 +51,7 @@ impl Error {
 
 #[derive(Debug)]
 pub enum ErrorRepr {
-    WrongArgument(String),
+    WrongArgument(Cow<'static, str>),
     WrongState(String),
     NullPointer(String),
     Io((std::io::Error, String)),
@@ -58,6 +59,7 @@ pub enum ErrorRepr {
     NetParse((AddrParseError, Cow<'static, str>)),
     LockPoison(String),
     Ffmpeg(ffmpeg::Error),
+    Jni(JniError),
 }
 
 impl fmt::Display for Error {
@@ -77,6 +79,7 @@ impl fmt::Display for Error {
             ErrorRepr::NetParse((e, addr)) => write!(f, "{} of {}", e, addr),
             ErrorRepr::LockPoison(descr) => write!(f, "{}", descr),
             ErrorRepr::Ffmpeg(e) => e.fmt(f),
+            ErrorRepr::Jni(e) => e.fmt(f),
         }
     }
 }
@@ -108,6 +111,13 @@ impl From<ffmpeg::Error> for Error {
     fn from(e: ffmpeg::Error) -> Self {
         Self {
             repr: Box::new(ErrorRepr::Ffmpeg(e)),
+        }
+    }
+}
+impl From<JniError> for Error {
+    fn from(e: JniError) -> Self {
+        Self {
+            repr: Box::new(ErrorRepr::Jni(e)),
         }
     }
 }

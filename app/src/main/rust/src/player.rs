@@ -1,9 +1,11 @@
-use crate::android_audio;
-use crate::android_audio::{AudioPlayer, Engine, OutputMix};
+use crate::android_audio::{self, AudioPlayer, Engine, OutputMix};
 use crate::error::Error;
+use crate::jni_ffi::ToJavaMsg;
+use crate::util::window_avg_calc::WindowAvgCalc;
 use log::{info, warn};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 pub struct Player {
     player: AudioPlayer,
@@ -13,7 +15,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new(to_java_send: mpsc::Sender<ToJavaMsg>) -> Result<Self, Error> {
         let engine = android_audio::Engine::new()?;
         engine.realize()?;
 
@@ -25,10 +27,10 @@ impl Player {
             format: android_audio::SampleFormat::S16LE,
         };
 
-        let player = engine.create_buffer_player(&output_mix, settings)?;
+        let player = engine.create_buffer_player(&output_mix, settings.clone())?;
         player.realize()?;
 
-        Self::construct(engine, output_mix, player)
+        Self::construct(to_java_send, settings, engine, output_mix, player)
     }
 
     pub fn start_playing(&self) -> Result<(), Error> {
@@ -67,8 +69,14 @@ impl Player {
         }
     }
 
-    fn construct(engine: Engine, mix: OutputMix, player: AudioPlayer) -> Result<Self, Error> {
-        let buffer = Arc::new(Mutex::new(OutputBuffer::new()));
+    fn construct(
+        to_java_send: mpsc::Sender<ToJavaMsg>,
+        settings: android_audio::Settings,
+        engine: Engine,
+        mix: OutputMix,
+        player: AudioPlayer,
+    ) -> Result<Self, Error> {
+        let buffer = Arc::new(Mutex::new(OutputBuffer::new(to_java_send, settings)));
 
         let mut res = Self {
             player,
@@ -103,8 +111,12 @@ impl Drop for Player {
 struct OutputBuffer {
     to_send: VecDeque<Vec<u8>>,
     free: Vec<Vec<u8>>,
+    last_played: Option<Vec<u8>>,
     que_packets: bool,
     is_first_packet: bool,
+    avg_to_send_len: WindowAvgCalc,
+    to_java_send: mpsc::Sender<ToJavaMsg>,
+    settings: android_audio::Settings,
 }
 
 #[must_use]
@@ -113,15 +125,20 @@ enum PostWriteAction {
     Read,
 }
 
-const JITTER_BUFFER_LEN: usize = 10;
+const JITTER_BUFFER_LEN: usize = 3;
+const AVG_OVER: usize = 100;
 
 impl OutputBuffer {
-    fn new() -> Self {
+    fn new(to_java_send: mpsc::Sender<ToJavaMsg>, settings: android_audio::Settings) -> Self {
         Self {
             to_send: VecDeque::new(),
             free: Vec::new(),
+            last_played: None,
             que_packets: false,
             is_first_packet: true,
+            avg_to_send_len: WindowAvgCalc::new(AVG_OVER).unwrap(),
+            to_java_send,
+            settings,
         }
     }
 
@@ -135,6 +152,9 @@ impl OutputBuffer {
         block.copy_from_slice(buf);
         self.to_send.push_back(block);
 
+        self.avg_to_send_len.push(self.to_send.len() as _);
+        self.notify_java_with_new_avg_delay();
+
         if self.is_first_packet {
             info!("Got first packet");
             self.is_first_packet = false;
@@ -142,7 +162,7 @@ impl OutputBuffer {
         } else if self.que_packets && self.to_send.len() >= JITTER_BUFFER_LEN {
             info!("Jitter buffer is full, start playing");
             self.que_packets = false;
-            PostWriteAction::Read
+            PostWriteAction::Nothing
         } else {
             PostWriteAction::Nothing
         }
@@ -150,7 +170,7 @@ impl OutputBuffer {
 
     fn read(&mut self, buf: &mut Vec<u8>) -> bool {
         if self.que_packets {
-            return false;
+            return self.read_last_played_block(buf);
         }
 
         let block = match self.to_send.pop_front() {
@@ -158,15 +178,61 @@ impl OutputBuffer {
             None => {
                 info!("Nothing to read");
                 self.que_packets = true;
-                return false;
+                return self.read_last_played_block(buf);
             }
         };
 
         buf.resize(block.len(), 0);
         buf.copy_from_slice(&block);
 
-        self.free.push(block);
+        if let Some(last_played) = self.last_played.take() {
+            self.free.push(last_played);
+        }
 
+        self.last_played = Some(block);
         true
+    }
+
+    fn notify_java_with_new_avg_delay(&self) {
+        let avg_buf_len = self.avg_to_send_len.get_avg();
+        let pkt_duration = self.get_pkt_duration();
+
+        let avg_delay = pkt_duration * (avg_buf_len as u32);
+
+        log_and_ignore_err!(self
+            .to_java_send
+            .send(ToJavaMsg::BufferSizeChanged(avg_delay)));
+    }
+
+    fn get_pkt_duration(&self) -> Duration {
+        if let Some(pkt) = &self.last_played {
+            self.calc_pkt_duration(pkt.len())
+        } else {
+            Duration::from_millis(23)
+        }
+    }
+
+    fn calc_pkt_duration(&self, bytes: usize) -> Duration {
+        let samples = bytes / self.settings.format.get_sample_size() / 2;
+        let rate = self.settings.rate.to_hz();
+
+        let micros = (samples as f64 / rate as f64) * 1000000.;
+        assert!(15000. <= micros && micros <= 43000.);
+
+        Duration::from_micros(micros as u64)
+    }
+
+    fn read_last_played_block(&mut self, buf: &mut Vec<u8>) -> bool {
+        match &self.last_played {
+            Some(block) => {
+                buf.resize(block.len(), 0);
+                buf.copy_from_slice(&block);
+                true
+            }
+            None => {
+                warn!("No Last Packet");
+                false
+            }
+        }
     }
 }

@@ -13,9 +13,10 @@ class RustWrapper {
     }
 
     private var rustObj: Long = 0
+    private var rustCb = RustCb()
 
     init {
-        rustObj = createObjectNative()
+        rustObj = createObjectNative(rustCb)
     }
 
     fun destroy() {
@@ -43,7 +44,7 @@ class RustWrapper {
 
     external fun greeting(pattern: String): String
 
-    private external fun createObjectNative(): Long
+    private external fun createObjectNative(cb: RustCb): Long
     private external fun destroyObjectNative(rustObj: Long): Long
     private external fun playNative(rustObj: Long, addr: String)
     private external fun stopNative(rustObj: Long)

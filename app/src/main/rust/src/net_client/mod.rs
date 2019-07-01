@@ -1,10 +1,13 @@
 use crate::error::Error;
 use crate::ffmpeg;
+use crate::jni_ffi::ToJavaMsg;
 use crate::player::Player;
+use crate::util::interval_measure::IntervalMeasure;
 use log::{info, warn};
 use mio;
 use mio::net::UdpSocket;
 use std::net::SocketAddr;
+use std::sync::mpsc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -25,6 +28,7 @@ impl NetClient {
         remote_addr: SocketAddr,
         local_addr: SocketAddr,
         player: Player,
+        to_java_send: mpsc::Sender<ToJavaMsg>,
     ) -> Result<Self, Error> {
         let socket = UdpSocket::bind(&local_addr)?;
 
@@ -73,6 +77,8 @@ impl NetClient {
             stopper,
             resampler,
             decoder,
+            to_java_send,
+            interval_measure: IntervalMeasure::new(),
         };
         let join_handle = thread::spawn(move || poll_loop.poll_loop());
 
@@ -120,6 +126,8 @@ struct PollLoop {
     stopper: Stopper,
     resampler: ffmpeg::Resampler,
     decoder: ffmpeg::Decoder,
+    to_java_send: mpsc::Sender<ToJavaMsg>,
+    interval_measure: IntervalMeasure,
 }
 
 struct Stopper {
@@ -188,6 +196,11 @@ impl PollLoop {
     }
 
     fn play(&mut self, buf: &[u8]) -> Result<(), Error> {
+        let is_changed = self.interval_measure.new_event();
+        if is_changed {
+            info!("Packet intervals: {}", self.interval_measure);
+        }
+
         self.decoder.write(buf)?;
         while let Some(data) = self.decoder.read()? {
             let data = self.resampler.resample(data)?;
