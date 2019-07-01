@@ -80,6 +80,9 @@ class BuildRust extends DefaultTask {
 
     java.nio.file.Path getJniLibPath(TargetType target) {
         return Paths.get(getSrcRootPath().toString(), "jniLibs", target.jniLibDirName, OUT_LIB_NAME)
+//        return Paths.get(
+//                project.rootDir.getPath(), "app", "build", "intermediates",
+//                "merged_jni_libs", variant, "out", target.jniLibDirName, OUT_LIB_NAME)
     }
 
     java.nio.file.Path getCargoPath() {
@@ -108,10 +111,10 @@ task buildRustRelease(type: BuildRust) {
 }
 
 tasks.whenTaskAdded { task ->
-    if (task.name == "compileDebugSources") {
+    if (task.name == "compileDebugSources" || task.name == "mergeDebugJniLibFolders") {
         task.dependsOn buildRustDebug
     }
-    if (task.name == "compileReleaseSources") {
+    if (task.name == "compileReleaseSources" || task.name == "mergeReleaseJniLibFolders") {
         task.dependsOn buildRustRelease
     }
 }
