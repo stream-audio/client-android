@@ -1,5 +1,6 @@
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.nio.file.Path
 
 class BuildRust extends DefaultTask {
     String variant
@@ -66,30 +67,24 @@ class BuildRust extends DefaultTask {
         def copyFrom = getRustLibOutPath(target)
         def copyTo = getJniLibPath(target)
 
-        if (copyTo.toFile().exists()) {
-            copyTo.toFile().delete()
-        }
-
+        Files.deleteIfExists(copyTo)
         Files.copy(copyFrom, copyTo)
         logger.info("Copy ${copyFrom} -> ${copyTo}")
     }
 
-    java.nio.file.Path getRustLibOutPath(TargetType target) {
+    Path getRustLibOutPath(TargetType target) {
         return Paths.get(getCargoPath().toString(), "target", target.rustTarget, variant, OUT_LIB_NAME)
     }
 
-    java.nio.file.Path getJniLibPath(TargetType target) {
+    Path getJniLibPath(TargetType target) {
         return Paths.get(getSrcRootPath().toString(), "jniLibs", target.jniLibDirName, OUT_LIB_NAME)
-//        return Paths.get(
-//                project.rootDir.getPath(), "app", "build", "intermediates",
-//                "merged_jni_libs", variant, "out", target.jniLibDirName, OUT_LIB_NAME)
     }
 
-    java.nio.file.Path getCargoPath() {
+    Path getCargoPath() {
         return Paths.get(getSrcRootPath().toString(), "rust")
     }
 
-    java.nio.file.Path getSrcRootPath() {
+    Path getSrcRootPath() {
         return Paths.get(project.rootDir.getPath(), "app", "src", "main")
     }
 
