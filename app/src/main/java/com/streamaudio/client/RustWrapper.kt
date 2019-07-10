@@ -45,7 +45,7 @@ class RustWrapper {
     external fun greeting(pattern: String): String
 
     private external fun createObjectNative(cb: RustCb): Long
-    private external fun destroyObjectNative(rustObj: Long): Long
+    private external fun destroyObjectNative(rustObj: Long)
     private external fun playNative(rustObj: Long, addr: String)
     private external fun stopNative(rustObj: Long)
     private external fun isPlayingNative(rustObj: Long): Boolean

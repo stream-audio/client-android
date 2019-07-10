@@ -1,4 +1,5 @@
-#[allow(non_snake_case)]
+#[macro_use]
+mod macros;
 mod from_java;
 mod to_java;
 

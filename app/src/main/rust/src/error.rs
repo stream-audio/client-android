@@ -121,3 +121,10 @@ impl From<JniError> for Error {
         }
     }
 }
+impl From<jni::errors::ErrorKind> for Error {
+    fn from(e: jni::errors::ErrorKind) -> Self {
+        Self {
+            repr: Box::new(ErrorRepr::Jni(JniError::from(e))),
+        }
+    }
+}

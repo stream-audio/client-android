@@ -1,11 +1,13 @@
 use crate::error::Error;
 use std::collections::VecDeque;
+use std::default::Default;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct WindowAvgCalc {
-    acc: f64,
+    acc: Duration,
     window_size: usize,
-    window: VecDeque<f64>,
+    window: VecDeque<Duration>,
 }
 
 impl WindowAvgCalc {
@@ -16,14 +18,14 @@ impl WindowAvgCalc {
             ))
         } else {
             Ok(Self {
-                acc: 0.,
+                acc: Default::default(),
                 window_size,
                 window: VecDeque::with_capacity(window_size),
             })
         }
     }
 
-    pub fn push(&mut self, num: f64) {
+    pub fn push(&mut self, num: Duration) {
         if self.window.len() >= self.window_size {
             self.acc -= self.window.pop_front().unwrap();
         }
@@ -32,11 +34,11 @@ impl WindowAvgCalc {
         self.acc += num;
     }
 
-    pub fn get_avg(&self) -> f64 {
+    pub fn get_avg(&self) -> Duration {
         if !self.window.is_empty() {
-            self.acc / self.window.len() as f64
+            self.acc / self.window.len() as u32
         } else {
-            0.
+            Default::default()
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::util::window_avg_calc::WindowAvgCalc;
 use log::{info, warn};
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct Player {
     player: AudioPlayer,
@@ -109,14 +109,19 @@ impl Drop for Player {
 }
 
 struct OutputBuffer {
-    to_send: VecDeque<Vec<u8>>,
-    free: Vec<Vec<u8>>,
-    last_played: Option<Vec<u8>>,
+    to_send: VecDeque<Frame>,
+    free: Vec<Frame>,
+    last_played: Option<Frame>,
     que_packets: bool,
     is_first_packet: bool,
     avg_to_send_len: WindowAvgCalc,
     to_java_send: mpsc::Sender<ToJavaMsg>,
     settings: android_audio::Settings,
+}
+
+struct Frame {
+    data: Vec<u8>,
+    created: Instant,
 }
 
 #[must_use]
@@ -145,15 +150,11 @@ impl OutputBuffer {
     fn write(&mut self, buf: &[u8]) -> PostWriteAction {
         let mut block = match self.free.pop() {
             Some(block) => block,
-            None => Vec::new(),
+            None => Frame::new(),
         };
 
-        block.resize(buf.len(), 0);
         block.copy_from_slice(buf);
         self.to_send.push_back(block);
-
-        self.avg_to_send_len.push(self.to_send.len() as _);
-        self.notify_java_with_new_avg_delay();
 
         if self.is_first_packet {
             info!("Got first packet");
@@ -182,8 +183,10 @@ impl OutputBuffer {
             }
         };
 
-        buf.resize(block.len(), 0);
-        buf.copy_from_slice(&block);
+        self.avg_to_send_len.push(block.elapsed());
+        self.notify_java_with_new_avg_delay();
+
+        block.copy_to_vec(buf);
 
         if let Some(last_played) = self.last_played.take() {
             self.free.push(last_played);
@@ -194,16 +197,12 @@ impl OutputBuffer {
     }
 
     fn notify_java_with_new_avg_delay(&self) {
-        let avg_buf_len = self.avg_to_send_len.get_avg();
-        let pkt_duration = self.get_pkt_duration();
-
-        let avg_delay = pkt_duration * (avg_buf_len as u32);
-
         log_and_ignore_err!(self
             .to_java_send
-            .send(ToJavaMsg::BufferSizeChanged(avg_delay)));
+            .send(ToJavaMsg::BufferSizeChanged(self.avg_to_send_len.get_avg())));
     }
 
+    #[allow(dead_code)]
     fn get_pkt_duration(&self) -> Duration {
         if let Some(pkt) = &self.last_played {
             self.calc_pkt_duration(pkt.len())
@@ -225,8 +224,7 @@ impl OutputBuffer {
     fn read_last_played_block(&mut self, buf: &mut Vec<u8>) -> bool {
         match &self.last_played {
             Some(block) => {
-                buf.resize(block.len(), 0);
-                buf.copy_from_slice(&block);
+                block.copy_to_vec(buf);
                 true
             }
             None => {
@@ -234,5 +232,33 @@ impl OutputBuffer {
                 false
             }
         }
+    }
+}
+
+impl Frame {
+    fn new() -> Self {
+        Self {
+            data: Vec::new(),
+            created: Instant::now(),
+        }
+    }
+
+    fn copy_from_slice(&mut self, buf: &[u8]) {
+        self.data.resize(buf.len(), 0);
+        self.data.copy_from_slice(buf);
+        self.created = Instant::now();
+    }
+
+    fn copy_to_vec(&self, buf: &mut Vec<u8>) {
+        buf.resize(self.data.len(), 0);
+        buf.copy_from_slice(&self.data);
+    }
+
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    fn elapsed(&self) -> Duration {
+        self.created.elapsed()
     }
 }

@@ -7,7 +7,7 @@ use crate::rust_greeting;
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::jstring;
 use jni::{JNIEnv, JavaVM};
-use log::{error, info};
+use log::{error, info, trace};
 use std::ffi::c_void;
 use std::mem::drop;
 use std::sync::mpsc;
@@ -54,11 +54,7 @@ fn throw_java_exception(env: JNIEnv, e: &Error) {
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_greeting(
-    env: JNIEnv,
-    _: JClass,
-    java_pattern: JString,
-) -> jstring {
+pub extern "C" fn greeting(env: JNIEnv, _: JClass, java_pattern: JString) -> jstring {
     info!("greeting is called");
 
     let pattern: String = env
@@ -73,11 +69,7 @@ pub extern "C" fn Java_com_streamaudio_client_RustWrapper_greeting(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_createObjectNative(
-    env: JNIEnv,
-    _: JClass,
-    cb: JObject,
-) -> i64 {
+pub extern "C" fn create_object(env: JNIEnv, _: JClass, cb: JObject) -> i64 {
     info!("createObject is called");
     println!("STDCOUT");
 
@@ -86,22 +78,13 @@ pub extern "C" fn Java_com_streamaudio_client_RustWrapper_createObjectNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_destroyObjectNative(
-    _env: JNIEnv,
-    _: JClass,
-    rust_obj: i64,
-) {
+pub extern "C" fn destroy_object(_env: JNIEnv, _: JClass, rust_obj: i64) {
     info!("destroyObject is called");
     drop(RustObj::from_raw_box(rust_obj));
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_playNative(
-    env: JNIEnv,
-    _: JClass,
-    rust_obj: i64,
-    remote_addr: JString,
-) {
+pub extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JString) {
     info!("Play is called");
 
     let remote_addr: String = env.get_string(remote_addr).unwrap().into();
@@ -132,11 +115,7 @@ pub extern "C" fn Java_com_streamaudio_client_RustWrapper_playNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_stopNative(
-    env: JNIEnv,
-    _: JClass,
-    rust_obj: i64,
-) {
+pub extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
     info!("Stop is called");
 
     let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
@@ -147,11 +126,7 @@ pub extern "C" fn Java_com_streamaudio_client_RustWrapper_stopNative(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_streamaudio_client_RustWrapper_isPlayingNative(
-    env: JNIEnv,
-    _: JClass,
-    rust_obj: i64,
-) -> bool {
+pub extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
     info!("isPlaying is called");
 
     let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, false);
@@ -160,11 +135,79 @@ pub extern "C" fn Java_com_streamaudio_client_RustWrapper_isPlayingNative(
 }
 
 #[no_mangle]
-pub extern "C" fn JNI_OnLoad(_vm: *mut JavaVM, _reserved: *mut c_void) -> i32 {
+#[allow(non_snake_case)]
+pub extern "C" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> i32 {
     android_helper::init_log();
     info!("JNI OnLoad!!");
     android_helper::redirect_stdcout();
+
+    let env = vm.get_env();
+    let env = match env {
+        Ok(env) => env,
+        Err(e) => {
+            error!("Error getting creating env from vm: {}", e);
+            return jni::sys::JNI_ERR;
+        }
+    };
+
+    let res = register_methods(env);
+    if let Err(e) = res {
+        error!("Error registering methods, {}", e);
+        return jni::sys::JNI_ERR;
+    }
+
     jni::JNIVersion::V6.into()
+}
+
+fn register_methods(env: JNIEnv) -> Result<(), Error> {
+    let cls = env.find_class("com/streamaudio/client/RustWrapper")?;
+
+    let methods = [
+        jni::sys::JNINativeMethod {
+            name: b"greeting\0".as_ptr() as _,
+            signature: b"(Ljava/lang/String;)Ljava/lang/String;\0".as_ptr() as _,
+            fnPtr: greeting as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"createObjectNative\0".as_ptr() as _,
+            signature: b"(Lcom/streamaudio/client/RustCb;)J\0".as_ptr() as _,
+            fnPtr: create_object as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"destroyObjectNative\0".as_ptr() as _,
+            signature: b"(J)V\0".as_ptr() as _,
+            fnPtr: destroy_object as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"playNative\0".as_ptr() as _,
+            signature: b"(JLjava/lang/String;)V\0".as_ptr() as _,
+            fnPtr: play as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"stopNative\0".as_ptr() as _,
+            signature: b"(J)V\0".as_ptr() as _,
+            fnPtr: stop as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"isPlayingNative\0".as_ptr() as _,
+            signature: b"(J)Z\0".as_ptr() as _,
+            fnPtr: is_playing as *mut c_void,
+        },
+    ];
+
+    let res = jni_non_void_call!(
+        env.get_native_interface(),
+        RegisterNatives,
+        cls.into_inner(),
+        methods.as_ptr(),
+        methods.len() as _
+    );
+
+    if res != 0 {
+        return Err(jni::errors::ErrorKind::Other(res).into());
+    }
+
+    Ok(())
 }
 
 impl RustObj {
