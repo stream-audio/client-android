@@ -45,16 +45,15 @@ fn throw_java_exception(env: JNIEnv, e: &Error) {
         ErrorRepr::NullPointer(descr) => {
             env.throw_new("java/lang/NullPointerException", descr)
                 .unwrap();
-            return;
         }
-        _ => (),
+        _ => {
+            env.throw_new("java/lang/Exception", format!("{}", e))
+                .unwrap();
+        }
     }
-    env.throw_new("java/lang/Exception", format!("{}", e))
-        .unwrap();
 }
 
-#[no_mangle]
-pub extern "C" fn greeting(env: JNIEnv, _: JClass, java_pattern: JString) -> jstring {
+extern "C" fn greeting(env: JNIEnv, _: JClass, java_pattern: JString) -> jstring {
     info!("greeting is called");
 
     let pattern: String = env
@@ -68,8 +67,7 @@ pub extern "C" fn greeting(env: JNIEnv, _: JClass, java_pattern: JString) -> jst
     output.into_inner()
 }
 
-#[no_mangle]
-pub extern "C" fn create_object(env: JNIEnv, _: JClass, cb: JObject) -> i64 {
+extern "C" fn create_object(env: JNIEnv, _: JClass, cb: JObject) -> i64 {
     info!("createObject is called");
     println!("STDCOUT");
 
@@ -77,14 +75,12 @@ pub extern "C" fn create_object(env: JNIEnv, _: JClass, cb: JObject) -> i64 {
     RustObj::boxed_into_raw(rust_obj)
 }
 
-#[no_mangle]
-pub extern "C" fn destroy_object(_env: JNIEnv, _: JClass, rust_obj: i64) {
+extern "C" fn destroy_object(_env: JNIEnv, _: JClass, rust_obj: i64) {
     info!("destroyObject is called");
     drop(RustObj::from_raw_box(rust_obj));
 }
 
-#[no_mangle]
-pub extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JString) {
+extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JString) {
     info!("Play is called");
 
     let remote_addr: String = env.get_string(remote_addr).unwrap().into();
@@ -114,8 +110,7 @@ pub extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JStri
     rust_obj.net_client = Some(net_client);
 }
 
-#[no_mangle]
-pub extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
+extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
     info!("Stop is called");
 
     let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
@@ -125,8 +120,7 @@ pub extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
+extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
     info!("isPlaying is called");
 
     let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, false);
