@@ -4,4 +4,5 @@
     <string name="stop_button">Stop</string>
     <string name="hintIpPort">127.0.0.1:25204</string>
     <string name="btnConnect">connect</string>
+    <string name="audioDelay">%1$d ms.</string>
 </resources>

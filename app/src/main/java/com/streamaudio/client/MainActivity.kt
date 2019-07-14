@@ -10,9 +10,14 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.concurrent.timerTask
 
 class MainActivity : AppCompatActivity() {
     var rustWrapper : RustWrapper? = null
+    lateinit var mTvDelay: TextView
+    private var mTvDelayTimer: Timer = Timer()
 
     companion object {
         private const val PERMISSION_ID: Int = 18616;
@@ -23,6 +28,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         rustWrapper = RustWrapper()
+        mTvDelay = findViewById<TextView>(R.id.tvDelay)
+
         val hello = rustWrapper!!.greeting("Anton")
 
         findViewById<TextView>(R.id.greeting).text = hello
@@ -55,13 +62,33 @@ class MainActivity : AppCompatActivity() {
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.stop_button)
+        startSoundDelayThread()
     }
 
     private fun stop() {
+        stopSoundDelayThread()
+
         rustWrapper!!.stop()
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.play_button)
+    }
+
+    private fun startSoundDelayThread() {
+        mTvDelayTimer = Timer()
+        mTvDelayTimer.schedule(timerTask{
+            runOnUiThread {
+                val rustWrapper = rustWrapper ?: return@runOnUiThread
+                if (!rustWrapper.isPlaying()) return@runOnUiThread
+
+                val delayMs = rustWrapper.getDelayMs()
+                mTvDelay.text = getString(R.string.audioDelay, delayMs)
+            }
+        },0, 1000)
+    }
+
+    private fun stopSoundDelayThread() {
+        mTvDelayTimer.cancel()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

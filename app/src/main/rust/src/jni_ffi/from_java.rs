@@ -36,6 +36,7 @@ macro_rules! throw_on_err {
 
 struct RustObj {
     net_client: Option<net_client::NetClient>,
+    player: Option<Player>,
     java_cb_send: mpsc::Sender<ToJavaMsg>,
     java_cb_thread: Option<JoinHandle<()>>,
 }
@@ -101,12 +102,13 @@ extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JString) 
         net_client::NetClient::new(
             remote_addr,
             "0.0.0.0:25204".parse().unwrap(),
-            player,
+            player.clone(),
             rust_obj.java_cb_send.clone()
         ),
         env
     );
 
+    rust_obj.player = Some(player);
     rust_obj.net_client = Some(net_client);
 }
 
@@ -115,17 +117,30 @@ extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
 
     let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
 
+    drop(rust_obj.player.take());
     if let Some(mut net_client) = rust_obj.net_client.take() {
         throw_on_err!(net_client.stop(), env);
     }
 }
 
 extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
-    info!("isPlaying is called");
-
     let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, false);
 
     rust_obj.net_client.is_some()
+}
+
+extern "C" fn get_delay_ms(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
+    let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, 0);
+    let player = match &rust_obj.player {
+        Some(player) => player,
+        None => {
+            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
+            return 0;
+        }
+    };
+
+    let delay = player.get_delay();
+    delay.as_millis() as i64
 }
 
 #[no_mangle]
@@ -187,6 +202,11 @@ fn register_methods(env: JNIEnv) -> Result<(), Error> {
             signature: b"(J)Z\0".as_ptr() as _,
             fnPtr: is_playing as *mut c_void,
         },
+        jni::sys::JNINativeMethod {
+            name: b"getDelayMsNative\0".as_ptr() as _,
+            signature: b"(J)J\0".as_ptr() as _,
+            fnPtr: get_delay_ms as *mut c_void,
+        },
     ];
 
     let res = jni_non_void_call!(
@@ -213,6 +233,7 @@ impl RustObj {
         let thread = thread::spawn(move || java_callback_loop(vm, cb, recv));
         Ok(Self {
             net_client: None,
+            player: None,
             java_cb_send: send,
             java_cb_thread: Some(thread),
         })

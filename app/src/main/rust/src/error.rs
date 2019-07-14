@@ -19,23 +19,22 @@ impl Error {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn new_wrong_state(description: String) -> Self {
+    pub fn new_wrong_state<S: Into<Cow<'static, str>>>(descr: S) -> Self {
         Error {
-            repr: Box::new(ErrorRepr::WrongState(description)),
+            repr: Box::new(ErrorRepr::WrongState(descr.into())),
         }
     }
 
-    pub fn new_null_ptr(description: String) -> Self {
+    pub fn new_null_ptr<S: Into<Cow<'static, str>>>(descr: S) -> Self {
         Error {
-            repr: Box::new(ErrorRepr::NullPointer(description)),
+            repr: Box::new(ErrorRepr::NullPointer(descr.into())),
         }
     }
 
     #[allow(dead_code)]
-    pub fn new_io(e: std::io::Error, f_name: String) -> Self {
+    pub fn new_io<S: Into<Cow<'static, str>>>(e: std::io::Error, f_name: S) -> Self {
         Error {
-            repr: Box::new(ErrorRepr::Io((e, f_name))),
+            repr: Box::new(ErrorRepr::Io((e, f_name.into()))),
         }
     }
 
@@ -52,9 +51,9 @@ impl Error {
 #[derive(Debug)]
 pub enum ErrorRepr {
     WrongArgument(Cow<'static, str>),
-    WrongState(String),
-    NullPointer(String),
-    Io((std::io::Error, String)),
+    WrongState(Cow<'static, str>),
+    NullPointer(Cow<'static, str>),
+    Io((std::io::Error, Cow<'static, str>)),
     SlError(SlError),
     NetParse((AddrParseError, Cow<'static, str>)),
     LockPoison(String),
@@ -89,7 +88,7 @@ impl ::std::error::Error for Error {}
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Self {
-            repr: Box::new(ErrorRepr::Io((e, String::new()))),
+            repr: Box::new(ErrorRepr::Io((e, "".into()))),
         }
     }
 }

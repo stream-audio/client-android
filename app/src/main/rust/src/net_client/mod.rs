@@ -6,6 +6,8 @@ use crate::util::interval_measure::IntervalMeasure;
 use log::{info, warn};
 use mio;
 use mio::net::UdpSocket;
+use std::convert::TryInto;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::sync::{
@@ -13,6 +15,7 @@ use std::sync::{
     Arc,
 };
 use std::thread::{self, JoinHandle};
+use std::u32;
 
 const UDP_TOKEN: mio::Token = mio::Token(0);
 const STOP_TOKEN: mio::Token = mio::Token(1);
@@ -45,7 +48,7 @@ impl NetClient {
             &socket,
             UDP_TOKEN,
             mio::Ready::readable(),
-            mio::PollOpt::level(),
+            mio::PollOpt::edge(),
         )?;
 
         poll.register(
@@ -79,6 +82,8 @@ impl NetClient {
             decoder,
             to_java_send,
             interval_measure: IntervalMeasure::new(),
+            pkt_cnt: 0,
+            missing_pkts_qty: 0,
         };
         let join_handle = thread::spawn(move || poll_loop.poll_loop());
 
@@ -128,6 +133,8 @@ struct PollLoop {
     decoder: ffmpeg::Decoder,
     to_java_send: mpsc::Sender<ToJavaMsg>,
     interval_measure: IntervalMeasure,
+    pkt_cnt: u32,
+    missing_pkts_qty: u32,
 }
 
 struct Stopper {
@@ -144,15 +151,18 @@ impl PollLoop {
             self.poll.poll(&mut events, None).unwrap();
             for event in &events {
                 match event.token() {
-                    UDP_TOKEN => {
+                    UDP_TOKEN => loop {
                         let res = self.socket.recv_from(&mut buf);
                         match res {
                             Ok((n, _)) => self.received_data(&buf[..n]),
                             Err(e) => {
-                                warn!("Error receiving data: {}", e);
+                                if !is_try_again(&e) {
+                                    warn!("Error receiving data: {}", e);
+                                }
+                                break;
                             }
                         }
-                    }
+                    },
                     STOP_TOKEN => {
                         if self.stopper.is_stopped() {
                             let res = self.socket.send_to(b"stop", &self.addr);
@@ -201,12 +211,43 @@ impl PollLoop {
             info!("Packet intervals: {}", self.interval_measure);
         }
 
+        let buf = self.unwrap_pkt(buf)?;
+
         self.decoder.write(buf)?;
         while let Some(data) = self.decoder.read()? {
             let data = self.resampler.resample(data)?;
             self.player.enqueue(data);
         }
         Ok(())
+    }
+
+    fn unwrap_pkt<'a>(&mut self, buf: &'a [u8]) -> Result<&'a [u8], Error> {
+        let (cnt_bytes, buf) = buf.split_at(std::mem::size_of::<u32>());
+        let cnt = u32::from_be_bytes(cnt_bytes.try_into().unwrap());
+
+        if self.pkt_cnt == 0 {
+            self.pkt_cnt = cnt;
+            return Ok(buf);
+        }
+
+        if self.pkt_cnt > cnt {
+            warn!(
+                "Out of order packet. New pkt cnt: {}, prev pkt cnt: {}",
+                cnt, self.pkt_cnt
+            )
+        } else if cnt - self.pkt_cnt != 1 {
+            self.missing_pkts_qty += (cnt - self.pkt_cnt) - 1;
+            warn!(
+                "A packet is missing. New pkt cnt: {}, prev pkt cnt: {}. Total missing packets: {}",
+                cnt, self.pkt_cnt, self.missing_pkts_qty
+            )
+        }
+        self.pkt_cnt = cnt;
+        if cnt % 32 == 0 {
+            info!("Packet cnt: {}", cnt);
+        }
+
+        Ok(buf)
     }
 }
 
@@ -239,5 +280,12 @@ impl mio::Evented for Stopper {
 
     fn deregister(&self, poll: &mio::Poll) -> Result<(), std::io::Error> {
         poll.deregister(&self.registration)
+    }
+}
+
+fn is_try_again(e: &io::Error) -> bool {
+    match e.kind() {
+        io::ErrorKind::WouldBlock => true,
+        _ => false,
     }
 }

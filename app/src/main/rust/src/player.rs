@@ -7,10 +7,11 @@ use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[derive(Clone)]
 pub struct Player {
-    player: AudioPlayer,
-    _mix: OutputMix,
-    _engine: Engine,
+    player: Arc<Mutex<AudioPlayer>>,
+    _mix: Arc<Mutex<OutputMix>>,
+    _engine: Arc<Mutex<Engine>>,
     buffer: Arc<Mutex<OutputBuffer>>,
 }
 
@@ -35,19 +36,25 @@ impl Player {
 
     pub fn start_playing(&self) -> Result<(), Error> {
         info!("Start playing");
-        self.player
-            .set_play_state(android_audio::PlayState::Playing)
+        let player = self.player.lock().unwrap();
+        player.set_play_state(android_audio::PlayState::Playing)
     }
 
     pub fn stop_playing(&self) -> Result<(), Error> {
         info!("Stop playing");
-        self.player
-            .set_play_state(android_audio::PlayState::Stopped)
+        let player = self.player.lock().unwrap();
+        player.set_play_state(android_audio::PlayState::Stopped)
     }
 
     #[allow(dead_code)]
     pub fn is_playing(&self) -> Result<bool, Error> {
-        Ok(self.player.get_play_state()? == android_audio::PlayState::Playing)
+        let player = self.player.lock().unwrap();
+        Ok(player.get_play_state()? == android_audio::PlayState::Playing)
+    }
+
+    pub fn get_delay(&self) -> Duration {
+        let buffer = self.buffer.lock().unwrap();
+        buffer.get_avg_delay()
     }
 
     pub fn enqueue(&self, buf: &[u8]) {
@@ -60,7 +67,8 @@ impl Player {
                 let mut buf = Vec::new();
                 let is_success = buffer.read(&mut buf);
                 if is_success {
-                    let res = self.player.enqueue(&buf);
+                    let player = self.player.lock().unwrap();
+                    let res = player.enqueue(&buf);
                     if let Err(e) = res {
                         warn!("Error enqueueing directly. {}", e);
                     }
@@ -74,28 +82,25 @@ impl Player {
         settings: android_audio::Settings,
         engine: Engine,
         mix: OutputMix,
-        player: AudioPlayer,
+        mut player: AudioPlayer,
     ) -> Result<Self, Error> {
         let buffer = Arc::new(Mutex::new(OutputBuffer::new(to_java_send, settings)));
 
-        let mut res = Self {
-            player,
-            _mix: mix,
-            _engine: engine,
+        let cb_buffer = buffer.clone();
+        player.register_callback(move |buf| -> Result<usize, Error> {
+            let mut buffer = cb_buffer.lock()?;
+
+            let is_success = buffer.read(buf);
+            let n = if is_success { buf.len() } else { 0 };
+            Ok(n)
+        })?;
+
+        Ok(Self {
+            player: Arc::new(Mutex::new(player)),
+            _mix: Arc::new(Mutex::new(mix)),
+            _engine: Arc::new(Mutex::new(engine)),
             buffer,
-        };
-
-        let buffer = res.buffer.clone();
-        res.player
-            .register_callback(move |buf| -> Result<usize, Error> {
-                let mut buffer = buffer.lock()?;
-
-                let is_success = buffer.read(buf);
-                let n = if is_success { buf.len() } else { 0 };
-                Ok(n)
-            })?;
-
-        Ok(res)
+        })
     }
 }
 
@@ -130,8 +135,8 @@ enum PostWriteAction {
     Read,
 }
 
-const JITTER_BUFFER_LEN: usize = 3;
-const AVG_OVER: usize = 100;
+const JITTER_BUFFER_LEN: usize = 10;
+const AVG_OVER: usize = 25;
 
 impl OutputBuffer {
     fn new(to_java_send: mpsc::Sender<ToJavaMsg>, settings: android_audio::Settings) -> Self {
@@ -194,6 +199,10 @@ impl OutputBuffer {
 
         self.last_played = Some(block);
         true
+    }
+
+    fn get_avg_delay(&self) -> Duration {
+        self.avg_to_send_len.get_avg()
     }
 
     fn notify_java_with_new_avg_delay(&self) {
