@@ -1,6 +1,7 @@
 use crate::android_audio::{self, AudioPlayer, Engine, OutputMix};
 use crate::error::Error;
 use crate::jni_ffi::ToJavaMsg;
+use crate::net_client::Pkt;
 use crate::util::window_avg_calc::WindowAvgCalc;
 use log::{info, warn};
 use std::collections::VecDeque;
@@ -57,10 +58,10 @@ impl Player {
         buffer.get_avg_delay()
     }
 
-    pub fn enqueue(&self, buf: &[u8]) {
+    pub fn enqueue(&self, pkt: &Pkt) {
         let mut buffer = self.buffer.lock().unwrap();
 
-        let post_write_action = buffer.write(buf);
+        let post_write_action = buffer.write(pkt);
         match post_write_action {
             PostWriteAction::Nothing => {}
             PostWriteAction::Read => {
@@ -125,7 +126,7 @@ struct OutputBuffer {
 }
 
 struct Frame {
-    data: Vec<u8>,
+    data: Pkt<'static>,
     created: Instant,
 }
 
@@ -152,15 +153,56 @@ impl OutputBuffer {
         }
     }
 
-    fn write(&mut self, buf: &[u8]) -> PostWriteAction {
-        let mut block = match self.free.pop() {
-            Some(block) => block,
-            None => Frame::new(),
+    fn write(&mut self, pkt: &Pkt) -> PostWriteAction {
+        let block = if pkt.is_empty() {
+            Frame::new_empty(pkt)
+        } else {
+            let mut block = match self.free.pop() {
+                Some(block) => block,
+                None => Frame::new(),
+            };
+            block.copy_from(pkt);
+            block
         };
 
-        block.copy_from_slice(buf);
         self.to_send.push_back(block);
+        self.choose_post_write_action()
+    }
 
+    fn read(&mut self, buf: &mut Vec<u8>) -> bool {
+        if self.que_packets {
+            return self.read_last_played_block(buf);
+        }
+
+        let block = match self.to_send.pop_front() {
+            Some(block) => {
+                if block.is_empty() {
+                    return self.read_last_played_block(buf);
+                } else {
+                    block
+                }
+            }
+            None => {
+                info!("Nothing to read");
+                self.que_packets = true;
+                return self.read_last_played_block(buf);
+            }
+        };
+
+        self.avg_to_send_len.push(block.elapsed());
+        self.notify_java_with_new_avg_delay();
+
+        let res = block.copy_to_vec(buf);
+
+        if let Some(last_played) = self.last_played.take() {
+            self.free.push(last_played);
+        }
+
+        self.last_played = Some(block);
+        res
+    }
+
+    fn choose_post_write_action(&mut self) -> PostWriteAction {
         if self.is_first_packet {
             info!("Got first packet");
             self.is_first_packet = false;
@@ -172,33 +214,6 @@ impl OutputBuffer {
         } else {
             PostWriteAction::Nothing
         }
-    }
-
-    fn read(&mut self, buf: &mut Vec<u8>) -> bool {
-        if self.que_packets {
-            return self.read_last_played_block(buf);
-        }
-
-        let block = match self.to_send.pop_front() {
-            Some(block) => block,
-            None => {
-                info!("Nothing to read");
-                self.que_packets = true;
-                return self.read_last_played_block(buf);
-            }
-        };
-
-        self.avg_to_send_len.push(block.elapsed());
-        self.notify_java_with_new_avg_delay();
-
-        block.copy_to_vec(buf);
-
-        if let Some(last_played) = self.last_played.take() {
-            self.free.push(last_played);
-        }
-
-        self.last_played = Some(block);
-        true
     }
 
     fn get_avg_delay(&self) -> Duration {
@@ -232,10 +247,7 @@ impl OutputBuffer {
 
     fn read_last_played_block(&mut self, buf: &mut Vec<u8>) -> bool {
         match &self.last_played {
-            Some(block) => {
-                block.copy_to_vec(buf);
-                true
-            }
+            Some(block) => block.copy_to_vec(buf),
             None => {
                 warn!("No Last Packet");
                 false
@@ -247,20 +259,31 @@ impl OutputBuffer {
 impl Frame {
     fn new() -> Self {
         Self {
-            data: Vec::new(),
+            data: Pkt::new_owner(0),
             created: Instant::now(),
         }
     }
 
-    fn copy_from_slice(&mut self, buf: &[u8]) {
-        self.data.resize(buf.len(), 0);
-        self.data.copy_from_slice(buf);
+    fn new_empty(pkt: &Pkt) -> Self {
+        assert!(pkt.is_empty());
+
+        Self {
+            data: Pkt::new_empty(pkt.cnt),
+            created: Instant::now(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    fn copy_from(&mut self, from: &Pkt) {
+        self.data.copy_from(&from);
         self.created = Instant::now();
     }
 
-    fn copy_to_vec(&self, buf: &mut Vec<u8>) {
-        buf.resize(self.data.len(), 0);
-        buf.copy_from_slice(&self.data);
+    fn copy_to_vec(&self, buf: &mut Vec<u8>) -> bool {
+        self.data.copy_to_vec(buf)
     }
 
     fn len(&self) -> usize {

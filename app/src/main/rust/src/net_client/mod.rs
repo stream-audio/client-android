@@ -1,12 +1,14 @@
+mod pkt_decoder;
+
+pub use pkt_decoder::Pkt;
+
 use crate::error::Error;
 use crate::ffmpeg;
 use crate::jni_ffi::ToJavaMsg;
 use crate::player::Player;
 use crate::util::interval_measure::IntervalMeasure;
 use log::{info, warn};
-use mio;
 use mio::net::UdpSocket;
-use std::convert::TryInto;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::mpsc;
@@ -15,7 +17,6 @@ use std::sync::{
     Arc,
 };
 use std::thread::{self, JoinHandle};
-use std::u32;
 
 const UDP_TOKEN: mio::Token = mio::Token(0);
 const STOP_TOKEN: mio::Token = mio::Token(1);
@@ -82,8 +83,7 @@ impl NetClient {
             decoder,
             to_java_send,
             interval_measure: IntervalMeasure::new(),
-            pkt_cnt: 0,
-            missing_pkts_qty: 0,
+            pkt_decoder: pkt_decoder::PktDecoder::new(),
         };
         let join_handle = thread::spawn(move || poll_loop.poll_loop());
 
@@ -133,8 +133,7 @@ struct PollLoop {
     decoder: ffmpeg::Decoder,
     to_java_send: mpsc::Sender<ToJavaMsg>,
     interval_measure: IntervalMeasure,
-    pkt_cnt: u32,
-    missing_pkts_qty: u32,
+    pkt_decoder: pkt_decoder::PktDecoder,
 }
 
 struct Stopper {
@@ -151,24 +150,10 @@ impl PollLoop {
             self.poll.poll(&mut events, None).unwrap();
             for event in &events {
                 match event.token() {
-                    UDP_TOKEN => loop {
-                        let res = self.socket.recv_from(&mut buf);
-                        match res {
-                            Ok((n, _)) => self.received_data(&buf[..n]),
-                            Err(e) => {
-                                if !is_try_again(&e) {
-                                    warn!("Error receiving data: {}", e);
-                                }
-                                break;
-                            }
-                        }
-                    },
+                    UDP_TOKEN => self.receive_data(&mut buf),
                     STOP_TOKEN => {
                         if self.stopper.is_stopped() {
-                            let res = self.socket.send_to(b"stop", &self.addr);
-                            if let Err(e) = res {
-                                warn!("Error sending stop to: {}. {}", self.addr, e);
-                            }
+                            self.send_stop();
                             return;
                         }
                     }
@@ -178,7 +163,29 @@ impl PollLoop {
         }
     }
 
-    fn received_data(&mut self, buf: &[u8]) {
+    fn receive_data(&mut self, buf: &mut [u8]) {
+        loop {
+            let res = self.socket.recv_from(buf);
+            match res {
+                Ok((n, _)) => self.process_data(&buf[..n]),
+                Err(e) => {
+                    if !is_try_again(&e) {
+                        warn!("Error receiving data: {}", e);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    fn send_stop(&mut self) {
+        let res = self.socket.send_to(b"stop", &self.addr);
+        if let Err(e) = res {
+            warn!("Error sending stop to: {}. {}", self.addr, e);
+        }
+    }
+
+    fn process_data(&mut self, buf: &[u8]) {
         match self.state {
             State::InfoRequested => self.send_start(),
             State::Started => {
@@ -211,43 +218,25 @@ impl PollLoop {
             info!("Packet intervals: {}", self.interval_measure);
         }
 
-        let buf = self.unwrap_pkt(buf)?;
+        let pkt_it = self.pkt_decoder.parse(buf)?;
+        for pkt in pkt_it {
+            let buf = match pkt.data {
+                None => {
+                    self.player.enqueue(&pkt);
+                    continue;
+                }
+                Some(buf) => buf,
+            };
 
-        self.decoder.write(buf)?;
-        while let Some(data) = self.decoder.read()? {
-            let data = self.resampler.resample(data)?;
-            self.player.enqueue(data);
+            self.decoder.write(&buf)?;
+            while let Some(data) = self.decoder.read()? {
+                let data = self.resampler.resample(data)?;
+                let pkt = Pkt::new_borrower(pkt.cnt, data);
+                self.player.enqueue(&pkt);
+            }
         }
+
         Ok(())
-    }
-
-    fn unwrap_pkt<'a>(&mut self, buf: &'a [u8]) -> Result<&'a [u8], Error> {
-        let (cnt_bytes, buf) = buf.split_at(std::mem::size_of::<u32>());
-        let cnt = u32::from_be_bytes(cnt_bytes.try_into().unwrap());
-
-        if self.pkt_cnt == 0 {
-            self.pkt_cnt = cnt;
-            return Ok(buf);
-        }
-
-        if self.pkt_cnt > cnt {
-            warn!(
-                "Out of order packet. New pkt cnt: {}, prev pkt cnt: {}",
-                cnt, self.pkt_cnt
-            )
-        } else if cnt - self.pkt_cnt != 1 {
-            self.missing_pkts_qty += (cnt - self.pkt_cnt) - 1;
-            warn!(
-                "A packet is missing. New pkt cnt: {}, prev pkt cnt: {}. Total missing packets: {}",
-                cnt, self.pkt_cnt, self.missing_pkts_qty
-            )
-        }
-        self.pkt_cnt = cnt;
-        if cnt % 32 == 0 {
-            info!("Packet cnt: {}", cnt);
-        }
-
-        Ok(buf)
     }
 }
 
