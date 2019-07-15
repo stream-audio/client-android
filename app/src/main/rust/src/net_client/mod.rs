@@ -218,22 +218,20 @@ impl PollLoop {
             info!("Packet intervals: {}", self.interval_measure);
         }
 
-        let pkt_it = self.pkt_decoder.parse(buf)?;
-        for pkt in pkt_it {
-            let buf = match pkt.data {
-                None => {
-                    self.player.enqueue(&pkt);
-                    continue;
-                }
-                Some(buf) => buf,
-            };
-
-            self.decoder.write(&buf)?;
-            while let Some(data) = self.decoder.read()? {
-                let data = self.resampler.resample(data)?;
-                let pkt = Pkt::new_borrower(pkt.cnt, data);
+        let pkt = self.pkt_decoder.parse(buf)?;
+        let buf = match pkt.data {
+            None => {
                 self.player.enqueue(&pkt);
+                return Ok(());
             }
+            Some(buf) => buf,
+        };
+
+        self.decoder.write(&buf)?;
+        while let Some(data) = self.decoder.read()? {
+            let data = self.resampler.resample(data)?;
+            let pkt = Pkt::new_borrower(pkt.cnt, data);
+            self.player.enqueue(&pkt);
         }
 
         Ok(())
