@@ -3,7 +3,6 @@ mod pkt_decoder;
 pub use pkt_decoder::Pkt;
 
 use crate::error::Error;
-use crate::ffmpeg;
 use crate::jni_ffi::ToJavaMsg;
 use crate::player::Player;
 use crate::util::interval_measure::IntervalMeasure;
@@ -61,17 +60,6 @@ impl NetClient {
 
         socket.send_to(b"info", &remote_addr)?;
 
-        let from_params = ffmpeg::AudioParams {
-            rate: 44100,
-            format: ffmpeg::AudioSampleFormat::FloatLe,
-        };
-        let to_params = ffmpeg::AudioParams {
-            rate: 44100,
-            format: ffmpeg::AudioSampleFormat::S16Le,
-        };
-        let resampler = ffmpeg::Resampler::new(from_params, to_params)?;
-        let decoder = ffmpeg::Decoder::new(ffmpeg::Codec::Aac)?;
-
         let poll_loop = PollLoop {
             poll,
             socket,
@@ -79,8 +67,6 @@ impl NetClient {
             state: State::InfoRequested,
             player,
             stopper,
-            resampler,
-            decoder,
             to_java_send,
             interval_measure: IntervalMeasure::new(),
             pkt_decoder: pkt_decoder::PktDecoder::new(),
@@ -129,8 +115,6 @@ struct PollLoop {
     state: State,
     player: Player,
     stopper: Stopper,
-    resampler: ffmpeg::Resampler,
-    decoder: ffmpeg::Decoder,
     to_java_send: mpsc::Sender<ToJavaMsg>,
     interval_measure: IntervalMeasure,
     pkt_decoder: pkt_decoder::PktDecoder,
@@ -219,20 +203,7 @@ impl PollLoop {
         }
 
         let pkt = self.pkt_decoder.parse(buf)?;
-        let buf = match pkt.data {
-            None => {
-                self.player.enqueue(&pkt);
-                return Ok(());
-            }
-            Some(buf) => buf,
-        };
-
-        self.decoder.write(&buf)?;
-        while let Some(data) = self.decoder.read()? {
-            let data = self.resampler.resample(data)?;
-            let pkt = Pkt::new_borrower(pkt.cnt, data);
-            self.player.enqueue(&pkt);
-        }
+        self.player.enqueue(&pkt)?;
 
         Ok(())
     }

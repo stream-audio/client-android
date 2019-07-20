@@ -59,7 +59,7 @@ impl Player {
         buffer.get_avg_delay()
     }
 
-    pub fn enqueue(&self, pkt: &Pkt) {
+    pub fn enqueue(&self, pkt: &Pkt) -> Result<(), Error> {
         let mut buffer = self.buffer.lock().unwrap();
 
         let post_write_action = buffer.write(pkt);
@@ -67,22 +67,22 @@ impl Player {
             PostWriteAction::Nothing => {}
             PostWriteAction::Read => {
                 let mut buf = Vec::new();
-                let is_success = buffer.read(&mut buf);
+                info!("Reading from buffer right after writing");
+                let is_success = buffer.read(&mut buf)?;
                 if is_success {
                     let player = self.player.lock().unwrap();
-                    let res = player.enqueue(&buf);
-                    if let Err(e) = res {
-                        warn!("Error enqueueing directly. {}", e);
-                    }
+                    player.enqueue(&buf)?;
                 }
             }
         }
+
+        Ok(())
     }
 
     fn on_read(output_buffer: &Arc<Mutex<OutputBuffer>>, to: &mut Vec<u8>) -> Result<usize, Error> {
         let mut output_buffer = output_buffer.lock()?;
 
-        let is_success = output_buffer.read(to);
+        let is_success = output_buffer.read(to)?;
         let n = if is_success { to.len() } else { 0 };
         Ok(n)
     }
@@ -94,7 +94,7 @@ impl Player {
         mix: OutputMix,
         mut player: AudioPlayer,
     ) -> Result<Self, Error> {
-        let buffer = Arc::new(Mutex::new(OutputBuffer::new(to_java_send, settings)));
+        let buffer = Arc::new(Mutex::new(OutputBuffer::new(to_java_send, settings)?));
 
         let cb_buffer = buffer.clone();
         player.register_callback(move |to| Player::on_read(&cb_buffer, to))?;
