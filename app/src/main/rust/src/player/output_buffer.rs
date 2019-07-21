@@ -198,6 +198,7 @@ impl OutputBuffer {
             }
             None => {
                 error!("No Last Packet");
+                self.is_first_packet = false;
                 Ok(false)
             }
         }
