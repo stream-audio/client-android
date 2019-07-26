@@ -6,18 +6,15 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.concurrent.timerTask
 
 class MainActivity : AppCompatActivity() {
-    var rustWrapper : RustWrapper? = null
-    lateinit var mTvDelay: TextView
-    private var mTvDelayTimer: Timer = Timer()
+    private var mRustWrapper : RustWrapper? = null
+    private lateinit var mTvDelay: TextView
+    private var mTvDelayTimer: Timer? = null
 
     companion object {
         private const val PERMISSION_ID: Int = 18616;
@@ -27,27 +24,33 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        rustWrapper = RustWrapper()
-        mTvDelay = findViewById<TextView>(R.id.tvDelay)
+        mRustWrapper = RustWrapper()
+        mTvDelay = findViewById(R.id.tvDelay)
 
-        val hello = rustWrapper!!.greeting("Anton")
+        val hello = mRustWrapper!!.greeting("Anton")
 
         findViewById<TextView>(R.id.greeting).text = hello
         findViewById<Button>(R.id.btn_play).setOnClickListener {
-            if (rustWrapper!!.isPlaying()) {
+            if (mRustWrapper!!.isPlaying()) {
                 stop()
             } else {
                 play()
             }
         }
+        findViewById<ImageButton>(R.id.btn_delay_increase).setOnClickListener {increaseDelay()}
+        findViewById<ImageButton>(R.id.btn_delay_decrease).setOnClickListener {decreaseDelay()}
 
         requestPermissions()
     }
 
     override fun onDestroy() {
-        rustWrapper?.destroy()
-        rustWrapper = null
+        mRustWrapper?.destroy()
+        mRustWrapper = null
         super.onDestroy()
+    }
+
+    private fun getPlayingRustWrapper(): RustWrapper? {
+        return if (mRustWrapper?.isPlaying() == true) mRustWrapper else null
     }
 
     private fun play() {
@@ -57,8 +60,8 @@ class MainActivity : AppCompatActivity() {
             return;
         }
 
-        rustWrapper!!.play(address)
-        //rustWrapper!!.play(Environment.getExternalStorageDirectory().path + "/Music/audio.example.wav")
+        mRustWrapper!!.play(address)
+        //mRustWrapper!!.play(Environment.getExternalStorageDirectory().path + "/Music/audio.example.wav")
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.stop_button)
@@ -68,27 +71,47 @@ class MainActivity : AppCompatActivity() {
     private fun stop() {
         stopSoundDelayThread()
 
-        rustWrapper!!.stop()
+        mRustWrapper!!.stop()
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.play_button)
     }
 
     private fun startSoundDelayThread() {
-        mTvDelayTimer = Timer()
-        mTvDelayTimer.schedule(timerTask{
+        stopSoundDelayThread()
+        val timer = Timer()
+        timer.schedule(timerTask{
             runOnUiThread {
-                val rustWrapper = rustWrapper ?: return@runOnUiThread
-                if (!rustWrapper.isPlaying()) return@runOnUiThread
-
-                val delayMs = rustWrapper.getDelayMs()
-                mTvDelay.text = getString(R.string.audioDelay, delayMs)
+                updateSoundDelay()
             }
         },0, 1000)
+        mTvDelayTimer = timer
+    }
+
+    private fun updateSoundDelay() {
+        val rustWrapper = mRustWrapper ?: return
+        if (!rustWrapper.isPlaying()) return
+
+        setSoundDelay(rustWrapper.getDelayMs())
+    }
+
+    private fun setSoundDelay(delayMs: Long) {
+        mTvDelay.text = getString(R.string.audioDelay, delayMs)
     }
 
     private fun stopSoundDelayThread() {
-        mTvDelayTimer.cancel()
+        mTvDelayTimer?.cancel()
+        mTvDelayTimer = null
+    }
+
+    private fun increaseDelay() {
+        val newDelayMs = getPlayingRustWrapper()?.increaseDelay() ?: return
+        setSoundDelay(newDelayMs)
+    }
+
+    private fun decreaseDelay() {
+        val newDelayMs = getPlayingRustWrapper()?.decreaseDelay() ?: return
+        setSoundDelay(newDelayMs)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

@@ -59,6 +59,16 @@ impl Player {
         buffer.get_avg_delay()
     }
 
+    pub fn increase_delay(&mut self) -> Duration {
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.increase_delay()
+    }
+
+    pub fn decrease_delay(&mut self) -> Duration {
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.decrease_delay()
+    }
+
     pub fn enqueue(&self, pkt: &Pkt) -> Result<(), Error> {
         let mut buffer = self.buffer.lock().unwrap();
 

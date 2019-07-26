@@ -143,6 +143,34 @@ extern "C" fn get_delay_ms(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
     delay.as_millis() as i64
 }
 
+extern "C" fn increase_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
+    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
+    let player = match &mut rust_obj.player {
+        Some(player) => player,
+        None => {
+            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
+            return 0;
+        }
+    };
+
+    let delay = player.increase_delay();
+    delay.as_millis() as i64
+}
+
+extern "C" fn decrease_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
+    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
+    let player = match &mut rust_obj.player {
+        Some(player) => player,
+        None => {
+            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
+            return 0;
+        }
+    };
+
+    let delay = player.decrease_delay();
+    delay.as_millis() as i64
+}
+
 #[no_mangle]
 #[allow(non_snake_case)]
 pub extern "C" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> i32 {
@@ -206,6 +234,16 @@ fn register_methods(env: JNIEnv) -> Result<(), Error> {
             name: b"getDelayMsNative\0".as_ptr() as _,
             signature: b"(J)J\0".as_ptr() as _,
             fnPtr: get_delay_ms as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"increaseDelayNative\0".as_ptr() as _,
+            signature: b"(J)J\0".as_ptr() as _,
+            fnPtr: increase_delay as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"decreaseDelayNative\0".as_ptr() as _,
+            signature: b"(J)J\0".as_ptr() as _,
+            fnPtr: decrease_delay as *mut c_void,
         },
     ];
 

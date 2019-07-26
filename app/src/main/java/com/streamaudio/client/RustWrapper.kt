@@ -46,6 +46,14 @@ class RustWrapper {
         return getDelayMsNative(rustObj)
     }
 
+    fun increaseDelay(): Long {
+        return increaseDelayNative(rustObj)
+    }
+
+    fun decreaseDelay(): Long {
+        return decreaseDelayNative(rustObj)
+    }
+
     external fun greeting(pattern: String): String
 
     private external fun createObjectNative(cb: RustCb): Long
@@ -54,4 +62,6 @@ class RustWrapper {
     private external fun stopNative(rustObj: Long)
     private external fun isPlayingNative(rustObj: Long): Boolean
     private external fun getDelayMsNative(rustObj: Long): Long
+    private external fun increaseDelayNative(rustObj: Long): Long
+    private external fun decreaseDelayNative(rustObj: Long): Long
 }

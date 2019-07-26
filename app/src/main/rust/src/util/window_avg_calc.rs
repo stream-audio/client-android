@@ -41,4 +41,10 @@ impl WindowAvgCalc {
             Default::default()
         }
     }
+
+    pub fn set_to(&mut self, new_delay: Duration) {
+        self.window.clear();
+        self.window.push_back(new_delay);
+        self.acc = new_delay;
+    }
 }

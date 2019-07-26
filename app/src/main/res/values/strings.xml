@@ -5,4 +5,6 @@
     <string name="hintIpPort">127.0.0.1:25204</string>
     <string name="btnConnect">connect</string>
     <string name="audioDelay">%1$d ms.</string>
+    <string name="btn_increase_delay">Increase Delay</string>
+    <string name="tv_default_delay">0 ms.</string>
 </resources>
