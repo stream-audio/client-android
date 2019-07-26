@@ -6,6 +6,7 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
+import android.view.WindowManager
 import android.widget.*
 import java.util.*
 import kotlin.collections.ArrayList
@@ -66,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.stop_button)
         startSoundDelayThread()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun stop() {
@@ -75,6 +77,8 @@ class MainActivity : AppCompatActivity() {
 
         val btn = findViewById<Button>(R.id.btn_play)
         btn.text = this.getText(R.string.play_button)
+
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun startSoundDelayThread() {
