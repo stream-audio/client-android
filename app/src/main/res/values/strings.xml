@@ -7,4 +7,11 @@
     <string name="audioDelay">%1$d ms.</string>
     <string name="btn_increase_delay">Increase Delay</string>
     <string name="tv_default_delay">0 ms.</string>
+
+    <string name="notification_title">Playing</string>
+    <string name="notification_text">Playing stream audio</string>
+    <string name="notification_ticker">Playing stream audio</string>
+
+    <string name="channel_foreground_name">Foreground</string>
+    <string name="channel_foreground_description">For the foreground service</string>
 </resources>

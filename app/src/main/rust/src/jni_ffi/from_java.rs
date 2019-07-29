@@ -197,7 +197,7 @@ pub extern "C" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> i32 {
 }
 
 fn register_methods(env: JNIEnv) -> Result<(), Error> {
-    let cls = env.find_class("com/streamaudio/client/RustWrapper")?;
+    let cls = env.find_class("com/streamaudio/client/service/rust/RustWrapper")?;
 
     let methods = [
         jni::sys::JNINativeMethod {
@@ -207,7 +207,7 @@ fn register_methods(env: JNIEnv) -> Result<(), Error> {
         },
         jni::sys::JNINativeMethod {
             name: b"createObjectNative\0".as_ptr() as _,
-            signature: b"(Lcom/streamaudio/client/RustCb;)J\0".as_ptr() as _,
+            signature: b"(Lcom/streamaudio/client/service/rust/RustCb;)J\0".as_ptr() as _,
             fnPtr: create_object as *mut c_void,
         },
         jni::sys::JNINativeMethod {

@@ -1,4 +1,4 @@
-package com.streamaudio.client
+package com.streamaudio.client.service.rust
 
 class RustWrapper {
     companion object {
