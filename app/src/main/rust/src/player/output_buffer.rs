@@ -13,13 +13,17 @@ pub struct OutputBuffer {
     to_send: VecDeque<Frame>,
     free: Vec<Frame>,
     last_played: Option<Frame>,
-    que_packets: usize,
     /// The packets qty to wait before start playing again
+    que_packets: usize,
     is_first_packet: bool,
-    avg_to_send_delay: WindowAvgCalc,
+    total_missing: usize,
+
     to_java_send: mpsc::Sender<ToJavaMsg>,
     decoder: AudioDecoder,
-    total_missing: usize,
+
+    avg_to_send_delay: WindowAvgCalc,
+    delay_fixed_at: Option<Duration>,
+    delay_went_over_small_margin: DelayWentOverSmallMargin,
 }
 
 #[must_use]
@@ -40,9 +44,18 @@ struct AudioDecoder {
     frame_duration: Option<Duration>,
 }
 
+enum DelayWentOverSmallMargin {
+    None,
+    Bigger(u32),
+    Smaller(u32),
+}
+
 const JITTER_BUFFER_LEN: usize = 3;
-const AVG_OVER: usize = 25;
+const AVG_OVER: usize = 50;
 const DELAY_CHANGE: Duration = Duration::from_millis(50);
+const FIX_DELAY_SMALL_MARGIN: Duration = Duration::from_millis(50);
+const FIX_DELAY_MARGIN: Duration = Duration::from_millis(100);
+const FIX_DELAY_SMALL_MARGIN_PKT_CNT: u32 = 100;
 
 impl OutputBuffer {
     pub fn new(
@@ -59,6 +72,8 @@ impl OutputBuffer {
             to_java_send,
             decoder: AudioDecoder::new(settings)?,
             total_missing: 0,
+            delay_fixed_at: None,
+            delay_went_over_small_margin: DelayWentOverSmallMargin::None,
         })
     }
 
@@ -102,6 +117,7 @@ impl OutputBuffer {
         };
 
         self.avg_to_send_delay.push(block.elapsed());
+        self.correct_delay_if_required();
         self.notify_java_with_new_avg_delay();
 
         self.decoder.decode(&block, to)?;
@@ -120,6 +136,7 @@ impl OutputBuffer {
 
     /// Returns a new delay value
     pub fn increase_delay(&mut self) -> Duration {
+        info!("Increasing delay");
         let cur_delay = self.get_avg_delay();
         let frame_duration = match self.decoder.get_frame_duration() {
             None => {
@@ -139,6 +156,7 @@ impl OutputBuffer {
 
     /// Returns a new delay value
     pub fn decrease_delay(&mut self) -> Duration {
+        info!("Decreasing delay");
         let cur_delay = self.get_avg_delay();
         let frame_duration = match self.decoder.get_frame_duration() {
             None => {
@@ -158,6 +176,20 @@ impl OutputBuffer {
 
         self.avg_to_send_delay.set_to(new_delay);
         new_delay
+    }
+
+    pub fn is_delay_fixed(&self) -> bool {
+        self.delay_fixed_at.is_some()
+    }
+
+    pub fn fix_delay_at(&mut self, delay: Duration) {
+        info!("Fixing delay at: {} ms.", delay.as_millis());
+        self.delay_fixed_at = Some(delay);
+    }
+
+    pub fn unfix_delay(&mut self) {
+        info!("Unfixing delay");
+        self.delay_fixed_at = None;
     }
 
     fn add_block(&mut self, block: Frame) {
@@ -206,6 +238,56 @@ impl OutputBuffer {
             PostWriteAction::Nothing
         } else {
             PostWriteAction::Nothing
+        }
+    }
+
+    fn correct_delay_if_required(&mut self) {
+        let target_delay = match self.delay_fixed_at {
+            None => {
+                return;
+            }
+            Some(d) => d,
+        };
+
+        let cur_delay = self.get_avg_delay();
+        if cur_delay > target_delay + FIX_DELAY_MARGIN {
+            self.decrease_delay();
+            self.delay_went_over_small_margin = DelayWentOverSmallMargin::None;
+        } else if cur_delay + FIX_DELAY_MARGIN < target_delay {
+            self.increase_delay();
+            self.delay_went_over_small_margin = DelayWentOverSmallMargin::None;
+        }
+
+        if cur_delay > target_delay + FIX_DELAY_SMALL_MARGIN {
+            match &mut self.delay_went_over_small_margin {
+                DelayWentOverSmallMargin::None | DelayWentOverSmallMargin::Smaller(_) => {
+                    self.delay_went_over_small_margin =
+                        DelayWentOverSmallMargin::Bigger(FIX_DELAY_SMALL_MARGIN_PKT_CNT);
+                }
+                DelayWentOverSmallMargin::Bigger(cnt) => {
+                    *cnt -= 1;
+                    if *cnt == 0 {
+                        self.decrease_delay();
+                        self.delay_went_over_small_margin = DelayWentOverSmallMargin::None;
+                    }
+                }
+            }
+        } else if cur_delay + FIX_DELAY_SMALL_MARGIN < target_delay {
+            match &mut self.delay_went_over_small_margin {
+                DelayWentOverSmallMargin::None | DelayWentOverSmallMargin::Bigger(_) => {
+                    self.delay_went_over_small_margin =
+                        DelayWentOverSmallMargin::Smaller(FIX_DELAY_SMALL_MARGIN_PKT_CNT);
+                }
+                DelayWentOverSmallMargin::Smaller(cnt) => {
+                    *cnt -= 1;
+                    if *cnt == 0 {
+                        self.increase_delay();
+                        self.delay_went_over_small_margin = DelayWentOverSmallMargin::None;
+                    }
+                }
+            }
+        } else {
+            self.delay_went_over_small_margin = DelayWentOverSmallMargin::None;
         }
     }
 

@@ -69,6 +69,21 @@ impl Player {
         buffer.decrease_delay()
     }
 
+    pub fn is_delay_fixed(&self) -> bool {
+        let buffer = self.buffer.lock().unwrap();
+        buffer.is_delay_fixed()
+    }
+
+    pub fn fix_delay_at(&mut self, delay: Duration) {
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.fix_delay_at(delay);
+    }
+
+    pub fn unfix_delay(&mut self) {
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.unfix_delay();
+    }
+
     pub fn enqueue(&self, pkt: &Pkt) -> Result<(), Error> {
         let mut buffer = self.buffer.lock().unwrap();
 

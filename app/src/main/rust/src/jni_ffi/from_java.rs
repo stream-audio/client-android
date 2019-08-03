@@ -12,6 +12,7 @@ use std::ffi::c_void;
 use std::mem::drop;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 macro_rules! throw_on_err {
     ($e: expr, $env: ident) => {{
@@ -131,13 +132,7 @@ extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
 
 extern "C" fn get_delay_ms(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
     let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, 0);
-    let player = match &rust_obj.player {
-        Some(player) => player,
-        None => {
-            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
-            return 0;
-        }
-    };
+    let player: &Player = throw_on_err!(rust_obj.get_player(), env, 0);
 
     let delay = player.get_delay();
     delay.as_millis() as i64
@@ -145,13 +140,7 @@ extern "C" fn get_delay_ms(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
 
 extern "C" fn increase_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
     let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
-    let player = match &mut rust_obj.player {
-        Some(player) => player,
-        None => {
-            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
-            return 0;
-        }
-    };
+    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
 
     let delay = player.increase_delay();
     delay.as_millis() as i64
@@ -159,16 +148,33 @@ extern "C" fn increase_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
 
 extern "C" fn decrease_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
     let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
-    let player = match &mut rust_obj.player {
-        Some(player) => player,
-        None => {
-            throw_java_exception(env, &Error::new_wrong_state("Player object is not created"));
-            return 0;
-        }
-    };
+    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
 
     let delay = player.decrease_delay();
     delay.as_millis() as i64
+}
+
+extern "C" fn is_delay_fixed(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
+    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, false);
+    rust_obj
+        .player
+        .as_ref()
+        .map_or(false, |p| p.is_delay_fixed())
+}
+
+extern "C" fn fix_delay_at(env: JNIEnv, _: JClass, rust_obj: i64, delay_ms: i64) {
+    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
+    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env);
+
+    let delay = Duration::from_millis(delay_ms as u64);
+    player.fix_delay_at(delay);
+}
+
+extern "C" fn unfix_delay(env: JNIEnv, _: JClass, rust_obj: i64) {
+    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
+    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env);
+
+    player.unfix_delay();
 }
 
 #[no_mangle]
@@ -245,6 +251,21 @@ fn register_methods(env: JNIEnv) -> Result<(), Error> {
             signature: b"(J)J\0".as_ptr() as _,
             fnPtr: decrease_delay as *mut c_void,
         },
+        jni::sys::JNINativeMethod {
+            name: b"isDelayFixedNative\0".as_ptr() as _,
+            signature: b"(J)Z\0".as_ptr() as _,
+            fnPtr: is_delay_fixed as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"fixDelayAtNative\0".as_ptr() as _,
+            signature: b"(JJ)V\0".as_ptr() as _,
+            fnPtr: fix_delay_at as *mut c_void,
+        },
+        jni::sys::JNINativeMethod {
+            name: b"unfixDelayNative\0".as_ptr() as _,
+            signature: b"(J)V\0".as_ptr() as _,
+            fnPtr: unfix_delay as *mut c_void,
+        },
     ];
 
     let res = jni_non_void_call!(
@@ -307,6 +328,18 @@ impl RustObj {
                 error!("Couldn't join java callback thread");
             }
         }
+    }
+
+    fn get_player(&self) -> Result<&Player, Error> {
+        self.player
+            .as_ref()
+            .ok_or_else(|| Error::new_wrong_state("Player object is not created"))
+    }
+
+    fn get_player_mut(&mut self) -> Result<&mut Player, Error> {
+        self.player
+            .as_mut()
+            .ok_or_else(|| Error::new_wrong_state("Player object is not created"))
     }
 }
 impl Drop for RustObj {

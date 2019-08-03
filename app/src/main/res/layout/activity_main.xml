@@ -11,15 +11,15 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:id="@+id/btn_delay_decrease"
-            android:contentDescription="@string/btn_increase_delay"
+            android:contentDescription="@string/btn_decrease_delay"
             android:layout_marginEnd="5dp"
-            app:layout_constraintTop_toTopOf="@id/tvDelay"
-            app:layout_constraintBottom_toBottomOf="@id/tvDelay"
-            app:layout_constraintRight_toLeftOf="@id/tvDelay"
+            app:layout_constraintTop_toTopOf="@id/tv_delay"
+            app:layout_constraintBottom_toBottomOf="@id/tv_delay"
+            app:layout_constraintRight_toLeftOf="@id/tv_delay"
             app:srcCompat="@drawable/ic_delay_decrease_24dp" />
 
     <TextView
-            android:id="@+id/tvDelay"
+            android:id="@+id/tv_delay"
             android:text="@string/tv_default_delay"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -34,10 +34,21 @@
             android:layout_marginEnd="10dp"
             android:id="@+id/btn_delay_increase"
             android:contentDescription="@string/btn_increase_delay"
-            app:layout_constraintTop_toTopOf="@id/tvDelay"
-            app:layout_constraintBottom_toBottomOf="@id/tvDelay"
+            app:layout_constraintTop_toTopOf="@id/tv_delay"
+            app:layout_constraintBottom_toBottomOf="@id/tv_delay"
             app:layout_constraintRight_toRightOf="parent"
             app:srcCompat="@drawable/ic_delay_increase_24dp" />
+
+    <ImageButton
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="10dp"
+            android:id="@+id/btn_delay_fix"
+            android:contentDescription="@string/btn_fix_delay"
+            app:layout_constraintTop_toBottomOf="@id/tv_delay"
+            app:layout_constraintLeft_toLeftOf="@id/tv_delay"
+            app:layout_constraintRight_toRightOf="@id/tv_delay"
+            app:srcCompat="@drawable/ic_delay_unlocked" />
 
     <Button
             android:text="@string/play_button"

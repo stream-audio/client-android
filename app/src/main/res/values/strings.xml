@@ -6,6 +6,9 @@
     <string name="btnConnect">connect</string>
     <string name="audioDelay">%1$d ms.</string>
     <string name="btn_increase_delay">Increase Delay</string>
+    <string name="btn_decrease_delay">Decrease Delay</string>
+    <string name="btn_fix_delay">Fix delay</string>
+    <string name="btn_unfix_delay">Unfix delay</string>
     <string name="tv_default_delay">0 ms.</string>
 
     <string name="notification_title">Playing</string>

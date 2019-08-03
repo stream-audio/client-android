@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mTvDelay: TextView
     private lateinit var mBtnStartStop: Button
+    private lateinit var mBtnFixDelay: ImageButton
     private var mTvDelayTimer: Timer? = null
     private var mServiceBound: PlayService.LocalBinder? = null
 
@@ -44,7 +45,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        mTvDelay = findViewById(R.id.tvDelay)
+        mTvDelay = findViewById(R.id.tv_delay)
+        mBtnFixDelay = findViewById(R.id.btn_delay_fix)
+        mBtnFixDelay.setOnClickListener {
+            if (mServiceBound?.isDelayFixed() == true) {
+                unfixDelay()
+            } else {
+                fixDelay()
+            }
+        }
 
         mBtnStartStop = findViewById(R.id.btn_play)
         mBtnStartStop.setOnClickListener {
@@ -116,6 +125,12 @@ class MainActivity : AppCompatActivity() {
         } else {
             displayStoppedState()
         }
+
+        if (mServiceBound?.isDelayFixed() == true) {
+            displayDelayAsFixed()
+        } else {
+            displayDelayAsUnfixed()
+        }
     }
 
     private fun displayPlayingState() {
@@ -142,10 +157,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSoundDelay() {
-        mServiceBound?.getDelayMs()?.let { delay -> setSoundDelay(delay) }
+        mServiceBound?.getDelayMs()?.let { delay -> setDisplayedSoundDelay(delay) }
     }
 
-    private fun setSoundDelay(delayMs: Long) {
+    private fun setDisplayedSoundDelay(delayMs: Long) {
         mTvDelay.text = getString(R.string.audioDelay, delayMs)
     }
 
@@ -155,14 +170,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun increaseDelay() {
-        mServiceBound?.increaseDelay()?.let { newDelay -> setSoundDelay(newDelay) }
+        val serviceBound = mServiceBound ?: return
+        if (!serviceBound.isPlaying()) return
+
+        val newDelay = serviceBound.increaseDelay()
+        fixDelayAt(newDelay)
+        setDisplayedSoundDelay(newDelay)
     }
 
     private fun decreaseDelay() {
-        mServiceBound?.decreaseDelay()?.let { newDelay -> setSoundDelay(newDelay) }
+        val serviceBound = mServiceBound ?: return
+        if (!serviceBound.isPlaying()) return
+
+        val newDelay = serviceBound.decreaseDelay()
+        fixDelayAt(newDelay)
+        setDisplayedSoundDelay(newDelay)
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    private fun fixDelay() {
+        val serviceBound = mServiceBound ?: return
+        if (!serviceBound.isPlaying()) return
+
+        val delayMs = serviceBound.getDelayMs()
+        fixDelayAt(delayMs)
+    }
+
+    private fun fixDelayAt(delayMs: Long) {
+        mServiceBound?.fixDelayAt(delayMs)
+        displayDelayAsFixed()
+    }
+
+    private fun unfixDelay() {
+        mServiceBound?.unfixDelay()
+        displayDelayAsUnfixed()
+    }
+
+    private fun displayDelayAsFixed() {
+        mBtnFixDelay.contentDescription = getString(R.string.btn_unfix_delay)
+        mBtnFixDelay.setImageResource(R.drawable.ic_delay_locked)
+    }
+
+    private fun displayDelayAsUnfixed() {
+        mBtnFixDelay.contentDescription = getString(R.string.btn_fix_delay)
+        mBtnFixDelay.setImageResource(R.drawable.ic_delay_unlocked)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         assert(requestCode == PERMISSION_ID)
         if (grantResults.any { it == PackageManager.PERMISSION_DENIED }) {
             finish()

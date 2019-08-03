@@ -17,6 +17,10 @@ class PlayService : Service() {
         fun getDelayMs(): Long = mRustWrapper.getDelayMs()
         fun increaseDelay(): Long = mRustWrapper.increaseDelay()
         fun decreaseDelay(): Long = mRustWrapper.decreaseDelay()
+
+        fun isDelayFixed(): Boolean = mRustWrapper.isDelayFixed()
+        fun fixDelayAt(delayMs: Long) = mRustWrapper.fixDelayAt(delayMs)
+        fun unfixDelay() = mRustWrapper.unfixDelay()
     }
 
     internal enum class Type { PLAY, STOP }
