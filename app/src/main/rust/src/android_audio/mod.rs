@@ -382,7 +382,7 @@ impl Drop for AudioPlayer {
 unsafe impl Send for AudioPlayer {}
 
 struct PlayCallbackWrapper {
-    cb: Box<FnMut(&mut Vec<u8>) -> Result<(usize), Error>>,
+    cb: Box<dyn FnMut(&mut Vec<u8>) -> Result<(usize), Error>>,
     buf: Vec<u8>,
 }
 
