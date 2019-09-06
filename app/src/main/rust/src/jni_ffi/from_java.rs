@@ -116,7 +116,7 @@ extern "C" fn play(env: JNIEnv, _: JClass, rust_obj: i64, remote_addr: JString) 
 extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
     info!("Stop is called");
 
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
 
     drop(rust_obj.player.take());
     if let Some(mut net_client) = rust_obj.net_client.take() {
@@ -125,37 +125,37 @@ extern "C" fn stop(env: JNIEnv, _: JClass, rust_obj: i64) {
 }
 
 extern "C" fn is_playing(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
-    let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, false);
+    let rust_obj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, false);
 
     rust_obj.net_client.is_some()
 }
 
 extern "C" fn get_delay_ms(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
-    let rust_obj: &RustObj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, 0);
-    let player: &Player = throw_on_err!(rust_obj.get_player(), env, 0);
+    let rust_obj = throw_on_err!(RustObj::from_raw_ref(rust_obj), env, 0);
+    let player = throw_on_err!(rust_obj.get_player(), env, 0);
 
     let delay = player.get_delay();
     delay.as_millis() as i64
 }
 
 extern "C" fn increase_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
-    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
+    let player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
 
     let delay = player.increase_delay();
     delay.as_millis() as i64
 }
 
 extern "C" fn decrease_delay(env: JNIEnv, _: JClass, rust_obj: i64) -> i64 {
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
-    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, 0);
+    let player = throw_on_err!(rust_obj.get_player_mut(), env, 0);
 
     let delay = player.decrease_delay();
     delay.as_millis() as i64
 }
 
 extern "C" fn is_delay_fixed(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, false);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env, false);
     rust_obj
         .player
         .as_ref()
@@ -163,16 +163,16 @@ extern "C" fn is_delay_fixed(env: JNIEnv, _: JClass, rust_obj: i64) -> bool {
 }
 
 extern "C" fn fix_delay_at(env: JNIEnv, _: JClass, rust_obj: i64, delay_ms: i64) {
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
-    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
+    let player = throw_on_err!(rust_obj.get_player_mut(), env);
 
     let delay = Duration::from_millis(delay_ms as u64);
     player.fix_delay_at(delay);
 }
 
 extern "C" fn unfix_delay(env: JNIEnv, _: JClass, rust_obj: i64) {
-    let rust_obj: &mut RustObj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
-    let player: &mut Player = throw_on_err!(rust_obj.get_player_mut(), env);
+    let rust_obj = throw_on_err!(RustObj::from_raw_mut(rust_obj), env);
+    let player = throw_on_err!(rust_obj.get_player_mut(), env);
 
     player.unfix_delay();
 }
